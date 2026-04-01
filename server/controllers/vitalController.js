@@ -1,0 +1,242 @@
+import VitalReading from "../models/VitalReading.js";
+import Alert from "../models/Alert.js";
+
+export const createVitalReading = async (req, res) => {
+  try {
+    const { type, systolic, diastolic, glucoseLevel, doctor } =
+      req.body;
+
+    // Detect dangerous readings
+    let flagged = false;
+
+    if (systolic && systolic > 160) flagged = true;
+    if (diastolic && diastolic > 100) flagged = true;
+    if (glucoseLevel && glucoseLevel > 180) flagged = true;
+
+    const vital = await VitalReading.create({
+      type,
+      systolic,
+      diastolic,
+      glucoseLevel,
+      doctor,
+      patient: req.user.id,
+      flagged,
+    });
+
+    res.status(201).json({
+      message: "Vital reading saved",
+      vital,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getCriticalAlerts = async (req, res) => {
+  try {
+    const alerts = await VitalReading.find({ flagged: true })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getFlaggedReadings = async (req, res) => {
+  try {
+    // Only doctor allowed
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const readings = await VitalReading.find({
+      doctor: req.user.id,
+      flagged: true,
+    }).populate("patient", "name email");
+
+    res.json({
+      count: readings.length,
+      readings,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Submit vital reading
+export const submitVital = async (req, res) => {
+  try {
+    const { type, systolic, diastolic, glucoseLevel, doctorId } = req.body;
+
+    // Only patients allowed
+    if (req.user.role !== "patient") {
+      return res
+        .status(403)
+        .json({ message: "Only patients can submit readings" });
+    }
+
+    let flagged = false;
+
+    // BP Logic
+    if (type === "bp") {
+      if (!systolic || !diastolic) {
+        return res
+          .status(400)
+          .json({ message: "BP requires systolic and diastolic values" });
+      }
+
+      if (systolic > 140 || diastolic > 90) {
+        flagged = true;
+      }
+    }
+
+    // Sugar Logic
+    if (type === "sugar") {
+      if (!glucoseLevel) {
+        return res
+          .status(400)
+          .json({ message: "Sugar reading requires glucose level" });
+      }
+
+      if (glucoseLevel > 180) {
+        flagged = true;
+      }
+    }
+
+    const reading = await VitalReading.create({
+      patient: req.user.id,
+      doctor: doctorId,
+      type,
+      systolic,
+      diastolic,
+      glucoseLevel,
+      flagged,
+    });
+
+    const io = req.app.get("io");
+
+    if (reading.flagged) {
+      io.emit("criticalAlert", {
+        message: "New critical patient vital detected",
+        vital,
+      });
+    }
+
+    res.status(201).json({
+      message: "Vital reading submitted",
+      flagged,
+      reading,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+export const markAsReviewed = async (req, res) => {
+  try {
+    // Only doctor allowed
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const reading = await VitalReading.findById(req.params.id);
+
+    if (!reading) {
+      return res.status(404).json({ message: "Reading not found" });
+    }
+
+    // Make sure doctor owns this reading
+    if (reading.doctor.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    reading.reviewedByDoctor = true;
+    await reading.save();
+
+    res.json({
+      message: "Reading marked as reviewed",
+      reading,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+export const getVitalHistory = async (req, res) => {
+  try {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    let query = {
+      createdAt: { $gte: sixMonthsAgo },
+    };
+
+    // If patient → only their own readings
+    if (req.user.role === "patient") {
+      query.patient = req.user.id;
+    }
+
+    // If doctor → all readings assigned to them
+    if (req.user.role === "doctor") {
+      query.doctor = req.user.id;
+    }
+
+    const readings = await VitalReading.find(query)
+      .populate("patient", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      count: readings.length,
+      readings,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+export const getLatestVitals = async (req, res) => {
+  try {
+    const vitals = await VitalReading.find()
+      .populate("patient", "name email")
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json({
+      count: vitals.length,
+      vitals,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+export const reviewVital = async (req, res) => {
+  try {
+    const vital = await VitalReading.findById(req.params.id);
+
+    if (!vital) {
+      return res.status(404).json({ message: "Vital not found" });
+    }
+
+    vital.reviewedByDoctor = true;
+    await vital.save();
+
+    res.json({
+      message: "Vital marked as reviewed",
+      vital,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+export const getVitalsByPatient = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const vitals = await VitalReading.find({ patient: id })
+      .populate("patient", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json({ vitals });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
