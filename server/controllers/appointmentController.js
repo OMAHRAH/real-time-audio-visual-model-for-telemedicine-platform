@@ -1,4 +1,5 @@
 import Appointment from "../models/appointment.js";
+import User from "../models/user.js";
 
 // Patient creates appointment
 export const createAppointment = async (req, res) => {
@@ -10,6 +11,15 @@ export const createAppointment = async (req, res) => {
     }
 
     const { doctorId, appointmentDate, reason } = req.body;
+
+    const doctor = await User.findOne({
+      _id: doctorId,
+      role: "doctor",
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
 
     const appointment = await Appointment.create({
       patient: req.user.id,

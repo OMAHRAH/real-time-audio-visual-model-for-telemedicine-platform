@@ -1,10 +1,15 @@
 import VitalReading from "../models/VitalReading.js";
-import Alert from "../models/Alert.js";
 
 export const createVitalReading = async (req, res) => {
   try {
-    const { type, systolic, diastolic, glucoseLevel, doctor } =
+    const { type, systolic, diastolic, glucoseLevel, doctor, doctorId } =
       req.body;
+
+    if (req.user.role !== "patient") {
+      return res
+        .status(403)
+        .json({ message: "Only patients can submit readings" });
+    }
 
     // Detect dangerous readings
     let flagged = false;
@@ -18,14 +23,27 @@ export const createVitalReading = async (req, res) => {
       systolic,
       diastolic,
       glucoseLevel,
-      doctor,
+      doctor: doctorId || doctor,
       patient: req.user.id,
       flagged,
     });
 
+    const populatedVital = await VitalReading.findById(vital._id)
+      .populate("patient", "name email")
+      .populate("doctor", "name email");
+
+    if (vital.flagged) {
+      const io = req.app.get("io");
+
+      io.emit("criticalAlert", {
+        message: "New critical patient vital detected",
+        vital: populatedVital,
+      });
+    }
+
     res.status(201).json({
       message: "Vital reading saved",
-      vital,
+      vital: populatedVital,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -34,7 +52,18 @@ export const createVitalReading = async (req, res) => {
 
 export const getCriticalAlerts = async (req, res) => {
   try {
-    const alerts = await VitalReading.find({ flagged: true })
+    const query = {
+      flagged: true,
+      reviewedByDoctor: false,
+    };
+
+    if (req.user.role === "patient") {
+      query.patient = req.user.id;
+    }
+
+    const alerts = await VitalReading.find(query)
+      .populate("patient", "name email")
+      .populate("doctor", "name email")
       .sort({ createdAt: -1 })
       .limit(10);
 
@@ -115,19 +144,23 @@ export const submitVital = async (req, res) => {
       flagged,
     });
 
+    const populatedReading = await VitalReading.findById(reading._id)
+      .populate("patient", "name email")
+      .populate("doctor", "name email");
+
     const io = req.app.get("io");
 
     if (reading.flagged) {
       io.emit("criticalAlert", {
         message: "New critical patient vital detected",
-        vital,
+        vital: populatedReading,
       });
     }
 
     res.status(201).json({
       message: "Vital reading submitted",
       flagged,
-      reading,
+      reading: populatedReading,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });

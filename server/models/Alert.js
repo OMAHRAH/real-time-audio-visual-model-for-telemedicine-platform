@@ -19,6 +19,18 @@ const alertSchema = new mongoose.Schema(
       required: true,
     },
 
+    type: {
+      type: String,
+      enum: ["critical_vital", "emergency"],
+      default: "critical_vital",
+    },
+
+    status: {
+      type: String,
+      enum: ["active", "resolved"],
+      default: "active",
+    },
+
     vitalReading: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "VitalReading",

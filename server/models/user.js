@@ -26,6 +26,17 @@ const userSchema = new mongoose.Schema(
       enum: ["patient", "doctor", "admin"],
       default: "patient",
     },
+
+    specialty: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    isOnline: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

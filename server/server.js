@@ -11,6 +11,9 @@ import alertRoutes from "./routes/alertRoutes.js";
 import { Server } from "socket.io";
 import http from "http";
 import chatRoutes from "./routes/chatRoutes.js";
+import patientRoutes from "./routes/patientRoutes.js";
+import doctorRoutes from "./routes/doctorRoutes.js";
+import callRoutes from "./routes/callRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -20,11 +23,62 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 
+const isAllowedSocketOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+};
+
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (isAllowedSocketOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by Socket.IO CORS"));
+    },
     methods: ["GET", "POST"],
   },
+});
+
+io.on("connection", (socket) => {
+  socket.on("chat:join-room", ({ roomId }) => {
+    if (!roomId) {
+      return;
+    }
+
+    socket.join(roomId);
+  });
+
+  socket.on("chat:leave-room", ({ roomId }) => {
+    if (!roomId) {
+      return;
+    }
+
+    socket.leave(roomId);
+  });
+
+  [
+    "call:invite",
+    "call:accept",
+    "call:decline",
+    "call:offer",
+    "call:answer",
+    "call:ice-candidate",
+    "call:end",
+  ].forEach((eventName) => {
+    socket.on(eventName, (payload) => {
+      if (!payload?.roomId) {
+        return;
+      }
+
+      socket.to(payload.roomId).emit(eventName, payload);
+    });
+  });
 });
 
 app.set("io", io);
@@ -42,6 +96,9 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/patients", patientRoutes);
+app.use("/api/doctors", doctorRoutes);
+app.use("/api/calls", callRoutes);
 app.use("/uploads", express.static("uploads"));
 
 app.get("/", (req, res) => {

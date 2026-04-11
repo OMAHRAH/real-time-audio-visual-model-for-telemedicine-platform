@@ -10,9 +10,9 @@ export const getDoctorDashboard = async (req, res) => {
 
     const doctorId = req.user.id;
 
-    // Total unique patients
-    const totalPatients = await Appointment.distinct("patient", {
-      doctor: doctorId,
+    // Total registered patients, including patients with no appointments yet.
+    const totalPatients = await User.countDocuments({
+      role: "patient",
     });
 
     // Total appointments
@@ -32,9 +32,8 @@ export const getDoctorDashboard = async (req, res) => {
       status: "approved",
     });
 
-    // Flagged vitals
+    // Flagged vitals are shown to doctors as active critical alerts.
     const flaggedVitals = await VitalReading.countDocuments({
-      doctor: doctorId,
       flagged: true,
       reviewedByDoctor: false,
     });
@@ -53,7 +52,7 @@ export const getDoctorDashboard = async (req, res) => {
     });
 
     res.json({
-      totalPatients: totalPatients.length,
+      totalPatients,
       totalAppointments,
       pendingAppointments,
       approvedAppointments,
