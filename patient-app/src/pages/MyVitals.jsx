@@ -7,25 +7,13 @@ export default function MyVitals() {
   const [systolic, setSystolic] = useState("");
   const [diastolic, setDiastolic] = useState("");
   const [glucose, setGlucose] = useState("");
-  const [doctorId, setDoctorId] = useState("");
-  const [doctors, setDoctors] = useState([]);
   const [vitals, setVitals] = useState([]);
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchVitals = async () => {
       try {
-        const [doctorsRes, vitalsRes] = await Promise.all([
-          API.get("/doctors"),
-          API.get(`/vitals/patient/${patientId}`),
-        ]);
-
-        const doctors = doctorsRes.data.doctors ?? [];
-        const preferredDoctor =
-          doctors.find((doctor) => doctor.isOnline) || doctors[0];
-
-        setDoctors(doctors);
-        setDoctorId(preferredDoctor?._id || "");
+        const vitalsRes = await API.get(`/vitals/patient/${patientId}`);
         setVitals(vitalsRes.data.vitals ?? []);
       } catch (error) {
         console.error("Failed to load vitals page", error);
@@ -33,17 +21,16 @@ export default function MyVitals() {
     };
 
     if (patientId) {
-      fetchData();
+      fetchVitals();
     }
   }, [patientId]);
 
-  const submitVitals = async (e) => {
-    e.preventDefault();
+  const submitVitals = async (event) => {
+    event.preventDefault();
     setFeedback("");
 
     try {
       const res = await API.post("/vitals", {
-        doctorId,
         systolic,
         diastolic,
         glucoseLevel: glucose,
@@ -52,18 +39,20 @@ export default function MyVitals() {
 
       setVitals((prev) => [res.data.vital, ...prev]);
       setFeedback(
-        res.data.vital?.flagged
-          ? "Vitals submitted. A doctor has been alerted."
-          : "Vitals submitted successfully.",
+        res.data.vital?.doctor
+          ? res.data.vital?.flagged
+            ? "Vitals submitted. Your assigned doctor has been alerted."
+            : "Vitals submitted successfully to your assigned doctor."
+          : "Vitals submitted. Admin will route them to the right doctor.",
       );
 
       setSystolic("");
       setDiastolic("");
       setGlucose("");
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       setFeedback(
-        err.response?.data?.message || "Error submitting vitals",
+        error.response?.data?.message || "Error submitting vitals",
       );
     }
   };
@@ -81,32 +70,17 @@ export default function MyVitals() {
           Submit daily vitals
         </h2>
         <p className="mb-6 text-sm leading-6 text-slate-500 sm:text-base">
-          Send your blood pressure and glucose reading to an online doctor.
+          Send your blood pressure and glucose reading. If you already have an
+          assigned doctor, the reading follows that care path. Otherwise admin
+          will route it.
         </p>
-
-        <label className="mb-2 block text-sm font-medium text-slate-700">
-          Doctor
-        </label>
-        <select
-          className="mb-4 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          value={doctorId}
-          onChange={(e) => setDoctorId(e.target.value)}
-          required
-        >
-          {doctors.map((doctor) => (
-            <option key={doctor._id} value={doctor._id}>
-              {doctor.name} - {doctor.specialty} (
-              {doctor.isOnline ? "Online" : "Offline"})
-            </option>
-          ))}
-        </select>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <input
             type="number"
             placeholder="Systolic (e.g. 120)"
             value={systolic}
-            onChange={(e) => setSystolic(e.target.value)}
+            onChange={(event) => setSystolic(event.target.value)}
             className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             required
           />
@@ -115,7 +89,7 @@ export default function MyVitals() {
             type="number"
             placeholder="Diastolic (e.g. 80)"
             value={diastolic}
-            onChange={(e) => setDiastolic(e.target.value)}
+            onChange={(event) => setDiastolic(event.target.value)}
             className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             required
           />
@@ -125,7 +99,7 @@ export default function MyVitals() {
           type="number"
           placeholder="Glucose Level"
           value={glucose}
-          onChange={(e) => setGlucose(e.target.value)}
+          onChange={(event) => setGlucose(event.target.value)}
           className="mb-4 mt-3 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           required
         />
@@ -163,6 +137,11 @@ export default function MyVitals() {
                   <p className="mt-1 text-sm text-slate-500">
                     BP {vital.systolic}/{vital.diastolic} | Glucose{" "}
                     {vital.glucoseLevel}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {vital.doctor?.name
+                      ? `Assigned doctor: ${vital.doctor.name}`
+                      : "Awaiting admin routing"}
                   </p>
                 </div>
 

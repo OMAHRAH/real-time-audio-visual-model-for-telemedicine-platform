@@ -1,6 +1,7 @@
 import User from "../models/user.js";
 import Appointment from "../models/appointment.js";
 import VitalReading from "../models/VitalReading.js";
+import CareAssignment from "../models/CareAssignment.js";
 
 export const getDoctorDashboard = async (req, res) => {
   try {
@@ -10,10 +11,23 @@ export const getDoctorDashboard = async (req, res) => {
 
     const doctorId = req.user.id;
 
-    // Total registered patients, including patients with no appointments yet.
-    const totalPatients = await User.countDocuments({
-      role: "patient",
-    });
+    const [activeAssignments, appointmentPatientIds, vitalPatientIds] =
+      await Promise.all([
+        CareAssignment.find({
+          doctor: doctorId,
+          status: "active",
+        })
+          .select("patient")
+          .lean(),
+        Appointment.distinct("patient", { doctor: doctorId }),
+        VitalReading.distinct("patient", { doctor: doctorId }),
+      ]);
+
+    const totalPatients = new Set([
+      ...activeAssignments.map((assignment) => assignment.patient.toString()),
+      ...appointmentPatientIds.map((patientId) => patientId.toString()),
+      ...vitalPatientIds.map((patientId) => patientId.toString()),
+    ]).size;
 
     // Total appointments
     const totalAppointments = await Appointment.countDocuments({
@@ -34,6 +48,7 @@ export const getDoctorDashboard = async (req, res) => {
 
     // Flagged vitals are shown to doctors as active critical alerts.
     const flaggedVitals = await VitalReading.countDocuments({
+      doctor: doctorId,
       flagged: true,
       reviewedByDoctor: false,
     });

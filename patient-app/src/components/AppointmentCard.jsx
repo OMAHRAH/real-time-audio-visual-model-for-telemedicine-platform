@@ -1,4 +1,10 @@
 export default function AppointmentCard({ appointment }) {
+  const doctorLabel = appointment.doctor?.name
+    ? `Doctor: ${appointment.doctor.name}`
+    : appointment.preferredDoctor?.name
+      ? `Preferred doctor: ${appointment.preferredDoctor.name} (awaiting routing)`
+      : "Doctor assignment pending admin routing";
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -7,7 +13,7 @@ export default function AppointmentCard({ appointment }) {
             {new Date(appointment.appointmentDate).toLocaleString()}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Doctor: {appointment.doctor?.name || "Not assigned"}
+            {doctorLabel}
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 import Alert from "../models/Alert.js";
 import User from "../models/user.js";
+import { getActiveAssignment, upsertActiveAssignment } from "../utils/careAssignments.js";
 
 export const getAlerts = async (req, res) => {
   try {
@@ -32,39 +33,46 @@ export const createEmergencyAlert = async (req, res) => {
         .json({ message: "Only patients can send emergency alerts" });
     }
 
-    let doctorId = req.body.doctorId;
+    const requestedDoctorId = req.body.doctorId || null;
+    let doctor = null;
 
-    if (!doctorId) {
-      const fallbackDoctor = await User.findOne({ role: "doctor" }).sort({
-        isOnline: -1,
-        name: 1,
+    if (requestedDoctorId) {
+      doctor = await User.findOne({
+        _id: requestedDoctorId,
+        role: "doctor",
       });
 
-      if (!fallbackDoctor) {
-        return res.status(404).json({ message: "No doctor is available" });
+      if (!doctor) {
+        return res.status(404).json({ message: "Doctor not found" });
       }
+    } else {
+      const activeAssignment = await getActiveAssignment(req.user.id).populate(
+        "doctor",
+        "name email specialty isOnline",
+      );
 
-      doctorId = fallbackDoctor._id;
-    }
-
-    const doctor = await User.findOne({
-      _id: doctorId,
-      role: "doctor",
-    });
-
-    if (!doctor) {
-      return res.status(404).json({ message: "Doctor not found" });
+      doctor = activeAssignment?.doctor || null;
     }
 
     const alert = await Alert.create({
       patient: req.user.id,
-      doctor: doctor._id,
+      doctor: doctor?._id || null,
       message:
         req.body.message ||
         "Emergency assistance requested by patient. Please respond immediately.",
       type: "emergency",
       status: "active",
     });
+
+    if (doctor?._id) {
+      await upsertActiveAssignment({
+        patientId: req.user.id,
+        doctorId: doctor._id,
+        assignedBy: req.user.id,
+        source: "emergency",
+        note: "Emergency alert routed to assigned doctor.",
+      });
+    }
 
     const populatedAlert = await Alert.findById(alert._id)
       .populate("patient", "name email")
@@ -75,7 +83,9 @@ export const createEmergencyAlert = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "Emergency alert sent",
+      message: doctor?._id
+        ? "Emergency alert sent"
+        : "Emergency alert sent and is waiting for admin routing.",
       alert: populatedAlert,
     });
   } catch (error) {

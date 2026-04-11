@@ -14,6 +14,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import patientRoutes from "./routes/patientRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
 import callRoutes from "./routes/callRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -99,6 +100,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/calls", callRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/uploads", express.static("uploads"));
 
 app.get("/", (req, res) => {

@@ -27,12 +27,17 @@ function PatientRecordPanel({
   onAutoSaveNotes,
   savedNoteId,
   compact = false,
+  readOnly = false,
 }) {
   const chartData = vitals.map((vital) => ({
     date: new Date(vital.createdAt).toLocaleDateString(),
     systolic: vital.systolic,
     glucoseLevel: vital.glucoseLevel,
   }));
+  const getAppointmentDoctorLabel = (appointment) =>
+    appointment.doctor?.name ||
+    appointment.preferredDoctor?.name ||
+    "Awaiting admin routing";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -306,7 +311,7 @@ function PatientRecordPanel({
                       ).toLocaleDateString()}
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      {appointment.doctor?.name}
+                      {getAppointmentDoctorLabel(appointment)}
                     </p>
                   </div>
 
@@ -334,38 +339,51 @@ function PatientRecordPanel({
                       </div>
                     )}
 
-                    <textarea
-                      id={`notes-${appointment._id}`}
-                      defaultValue={appointment.doctorNotes}
-                      placeholder="Write visit notes..."
-                      className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
-                      onBlur={(event) =>
-                        onAutoSaveNotes(appointment._id, event.target.value)
-                      }
-                    />
+                    {readOnly ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        <p className="font-medium text-slate-900">
+                          Clinical notes
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap">
+                          {appointment.doctorNotes || "No notes added yet."}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <textarea
+                          id={`notes-${appointment._id}`}
+                          defaultValue={appointment.doctorNotes}
+                          placeholder="Write visit notes..."
+                          className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
+                          onBlur={(event) =>
+                            onAutoSaveNotes(appointment._id, event.target.value)
+                          }
+                        />
 
-                    {savedNoteId === appointment._id && (
-                      <p className="mt-2 text-sm text-emerald-600">
-                        Notes saved
-                      </p>
+                        {savedNoteId === appointment._id && (
+                          <p className="mt-2 text-sm text-emerald-600">
+                            Notes saved
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onSaveNotes(appointment._id)}
+                            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+                          >
+                            Save Notes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onCompleteAppointment(appointment._id)}
+                            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                          >
+                            Complete Visit
+                          </button>
+                        </div>
+                      </>
                     )}
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onSaveNotes(appointment._id)}
-                        className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-                      >
-                        Save Notes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onCompleteAppointment(appointment._id)}
-                        className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                      >
-                        Complete Visit
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -396,7 +414,7 @@ function PatientRecordPanel({
                       </td>
 
                       <td className="py-4 pr-4 text-slate-600">
-                        {appointment.doctor?.name}
+                        {getAppointmentDoctorLabel(appointment)}
                       </td>
 
                       <td
@@ -424,43 +442,56 @@ function PatientRecordPanel({
                             </div>
                           )}
 
-                          <textarea
-                            id={`notes-${appointment._id}`}
-                            defaultValue={appointment.doctorNotes}
-                            placeholder="Write visit notes..."
-                            className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
-                            onBlur={(event) =>
-                              onAutoSaveNotes(
-                                appointment._id,
-                                event.target.value,
-                              )
-                            }
-                          />
+                          {readOnly ? (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                              <p className="font-medium text-slate-900">
+                                Clinical notes
+                              </p>
+                              <p className="mt-1 whitespace-pre-wrap">
+                                {appointment.doctorNotes || "No notes added yet."}
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <textarea
+                                id={`notes-${appointment._id}`}
+                                defaultValue={appointment.doctorNotes}
+                                placeholder="Write visit notes..."
+                                className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
+                                onBlur={(event) =>
+                                  onAutoSaveNotes(
+                                    appointment._id,
+                                    event.target.value,
+                                  )
+                                }
+                              />
 
-                          {savedNoteId === appointment._id && (
-                            <p className="mt-2 text-sm text-emerald-600">
-                              Notes saved
-                            </p>
+                              {savedNoteId === appointment._id && (
+                                <p className="mt-2 text-sm text-emerald-600">
+                                  Notes saved
+                                </p>
+                              )}
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onSaveNotes(appointment._id)}
+                                  className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+                                >
+                                  Save Notes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onCompleteAppointment(appointment._id)
+                                  }
+                                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                                >
+                                  Complete Visit
+                                </button>
+                              </div>
+                            </>
                           )}
-
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onSaveNotes(appointment._id)}
-                              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-                            >
-                              Save Notes
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onCompleteAppointment(appointment._id)
-                              }
-                              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                            >
-                              Complete Visit
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     )}

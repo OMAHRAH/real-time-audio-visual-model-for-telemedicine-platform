@@ -1,4 +1,7 @@
 import VitalReading from "../models/VitalReading.js";
+import Appointment from "../models/appointment.js";
+import CareAssignment from "../models/CareAssignment.js";
+import { getActiveAssignment, upsertActiveAssignment } from "../utils/careAssignments.js";
 
 export const createVitalReading = async (req, res) => {
   try {
@@ -18,15 +21,29 @@ export const createVitalReading = async (req, res) => {
     if (diastolic && diastolic > 100) flagged = true;
     if (glucoseLevel && glucoseLevel > 180) flagged = true;
 
+    const requestedDoctorId = doctorId || doctor || null;
+    const activeAssignment = await getActiveAssignment(req.user.id).select("doctor");
+    const routedDoctorId = activeAssignment?.doctor || requestedDoctorId || null;
+
     const vital = await VitalReading.create({
       type,
       systolic,
       diastolic,
       glucoseLevel,
-      doctor: doctorId || doctor,
+      doctor: routedDoctorId,
       patient: req.user.id,
       flagged,
     });
+
+    if (routedDoctorId) {
+      await upsertActiveAssignment({
+        patientId: req.user.id,
+        doctorId: routedDoctorId,
+        assignedBy: req.user.id,
+        source: "vital",
+        note: "Patient vitals routed to assigned doctor.",
+      });
+    }
 
     const populatedVital = await VitalReading.findById(vital._id)
       .populate("patient", "name email")
@@ -42,7 +59,9 @@ export const createVitalReading = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "Vital reading saved",
+      message: routedDoctorId
+        ? "Vital reading saved"
+        : "Vital reading saved and is waiting for admin routing.",
       vital: populatedVital,
     });
   } catch (error) {
@@ -59,6 +78,10 @@ export const getCriticalAlerts = async (req, res) => {
 
     if (req.user.role === "patient") {
       query.patient = req.user.id;
+    }
+
+    if (req.user.role === "doctor") {
+      query.doctor = req.user.id;
     }
 
     const alerts = await VitalReading.find(query)
@@ -134,15 +157,28 @@ export const submitVital = async (req, res) => {
       }
     }
 
+    const activeAssignment = await getActiveAssignment(req.user.id).select("doctor");
+    const routedDoctorId = activeAssignment?.doctor || doctorId || null;
+
     const reading = await VitalReading.create({
       patient: req.user.id,
-      doctor: doctorId,
+      doctor: routedDoctorId,
       type,
       systolic,
       diastolic,
       glucoseLevel,
       flagged,
     });
+
+    if (routedDoctorId) {
+      await upsertActiveAssignment({
+        patientId: req.user.id,
+        doctorId: routedDoctorId,
+        assignedBy: req.user.id,
+        source: "vital",
+        note: "Patient vitals routed to assigned doctor.",
+      });
+    }
 
     const populatedReading = await VitalReading.findById(reading._id)
       .populate("patient", "name email")
@@ -158,7 +194,9 @@ export const submitVital = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "Vital reading submitted",
+      message: routedDoctorId
+        ? "Vital reading submitted"
+        : "Vital reading submitted and is waiting for admin routing.",
       flagged,
       reading: populatedReading,
     });
@@ -228,7 +266,13 @@ export const getVitalHistory = async (req, res) => {
 };
 export const getLatestVitals = async (req, res) => {
   try {
-    const vitals = await VitalReading.find()
+    const query = {};
+
+    if (req.user.role === "doctor") {
+      query.doctor = req.user.id;
+    }
+
+    const vitals = await VitalReading.find(query)
       .populate("patient", "name email")
       .sort({ createdAt: -1 })
       .limit(10);
@@ -263,6 +307,26 @@ export const reviewVital = async (req, res) => {
 export const getVitalsByPatient = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.user.role === "patient" && req.user.id !== id) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    if (req.user.role === "doctor") {
+      const activeAssignment = await CareAssignment.findOne({
+        doctor: req.user.id,
+        patient: id,
+        status: "active",
+      }).lean();
+      const hasHistoricalRelationship = await Appointment.exists({
+        doctor: req.user.id,
+        patient: id,
+      });
+
+      if (!activeAssignment && !hasHistoricalRelationship) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+    }
 
     const vitals = await VitalReading.find({ patient: id })
       .populate("patient", "name email")

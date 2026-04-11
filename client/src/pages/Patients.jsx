@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/api";
+import { getCurrentUser } from "../auth";
 import DoctorShell from "../components/DoctorShell";
 import useUnreadPatientMessages from "../hooks/useUnreadPatientMessages";
 
 const surfaceClass = "rounded-3xl border border-slate-200 bg-white shadow-sm";
 
 function Patients() {
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === "admin";
   const { unreadCountsByPatient } = useUnreadPatientMessages();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,10 +35,17 @@ function Patients() {
     fetchPatients();
   }, []);
 
+  const getPatientPath = (patientId) =>
+    isAdmin ? `/admin/patients/${patientId}` : `/patients/${patientId}`;
+
   return (
     <DoctorShell
       title="Patients"
-      subtitle="Review patient records, unread chats and the latest follow-up activity."
+      subtitle={
+        isAdmin
+          ? "Review assignment status, patient records and routing readiness."
+          : "Review patient records, unread chats and the latest follow-up activity."
+      }
     >
       <div className={`p-5 sm:p-6 ${surfaceClass}`}>
         {loading && <p className="text-sm text-slate-500">Loading patients...</p>}
@@ -52,7 +62,7 @@ function Patients() {
               {patients.map((patient) => (
                 <Link
                   key={patient._id}
-                  to={`/patients/${patient._id}`}
+                  to={getPatientPath(patient._id)}
                   className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50"
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -78,11 +88,15 @@ function Patients() {
 
                   <div className="mt-4 flex items-center justify-between gap-4 text-sm">
                     <span className="text-slate-500">
-                      {patient.lastAppointment
-                        ? `Last appointment: ${new Date(
-                            patient.lastAppointment,
-                          ).toLocaleDateString()}`
-                        : "No appointment yet"}
+                      {isAdmin
+                        ? patient.activeAssignment?.doctor?.name
+                          ? `Assigned: ${patient.activeAssignment.doctor.name}`
+                          : "Awaiting assignment"
+                        : patient.lastAppointment
+                          ? `Last appointment: ${new Date(
+                              patient.lastAppointment,
+                            ).toLocaleDateString()}`
+                          : "No appointment yet"}
                     </span>
                     <span className="font-medium text-blue-600">Open</span>
                   </div>
@@ -96,8 +110,12 @@ function Patients() {
                   <tr className="border-b border-slate-200 text-left text-sm text-slate-500">
                     <th className="py-3 pr-4 font-medium">Name</th>
                     <th className="py-3 pr-4 font-medium">Email</th>
-                    <th className="py-3 pr-4 font-medium">Unread Chat</th>
-                    <th className="py-3 pr-4 font-medium">Last Appointment</th>
+                    <th className="py-3 pr-4 font-medium">
+                      {isAdmin ? "Assigned Doctor" : "Unread Chat"}
+                    </th>
+                    <th className="py-3 pr-4 font-medium">
+                      {isAdmin ? "Routing Updated" : "Last Appointment"}
+                    </th>
                     <th className="py-3 font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -112,26 +130,38 @@ function Patients() {
                       <td className="py-4 pr-4 text-slate-600">{patient.email}</td>
 
                       <td className="py-4 pr-4">
-                        {unreadCountsByPatient[patient._id] > 0 ? (
-                          <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
-                            {unreadCountsByPatient[patient._id]}
+                        {isAdmin ? (
+                          <span className="text-slate-600">
+                            {patient.activeAssignment?.doctor?.name || "Awaiting assignment"}
                           </span>
                         ) : (
-                          <span className="text-slate-400">0</span>
+                          unreadCountsByPatient[patient._id] > 0 ? (
+                            <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                              {unreadCountsByPatient[patient._id]}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0</span>
+                          )
                         )}
                       </td>
 
                       <td className="py-4 pr-4 text-slate-600">
-                        {patient.lastAppointment
-                          ? new Date(
-                              patient.lastAppointment,
-                            ).toLocaleDateString()
-                          : "No appointment"}
+                        {isAdmin
+                          ? patient.activeAssignment?.updatedAt
+                            ? new Date(
+                                patient.activeAssignment.updatedAt,
+                              ).toLocaleDateString()
+                            : "Not routed"
+                          : patient.lastAppointment
+                            ? new Date(
+                                patient.lastAppointment,
+                              ).toLocaleDateString()
+                            : "No appointment"}
                       </td>
 
                       <td className="py-4">
                         <Link
-                          to={`/patients/${patient._id}`}
+                          to={getPatientPath(patient._id)}
                           className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                         >
                           View

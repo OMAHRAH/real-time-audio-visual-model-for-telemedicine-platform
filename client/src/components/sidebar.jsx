@@ -63,24 +63,37 @@ function SunIcon({ className = "h-5 w-5" }) {
   );
 }
 
-const navItems = [
-  {
-    to: "/",
-    label: "Dashboard",
-    description: "Overview, alerts and appointments",
-  },
-  {
-    to: "/patients",
-    label: "Patients",
-    description: "Conversations and records",
-    showUnreadBadge: true,
-  },
-];
-
 function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const currentUser = getCurrentUser();
   const { totalUnreadConversations } = useUnreadPatientMessages();
   const { isDark, toggleTheme } = useTheme();
+  const isAdmin = currentUser?.role === "admin";
+  const navItems = isAdmin
+    ? [
+        {
+          to: "/",
+          label: "Dashboard",
+          description: "Routing, staffing and intake control",
+        },
+        {
+          to: "/patients",
+          label: "Patients",
+          description: "All patient records and assignments",
+        },
+      ]
+    : [
+        {
+          to: "/",
+          label: "Dashboard",
+          description: "Overview, alerts and appointments",
+        },
+        {
+          to: "/patients",
+          label: "Patients",
+          description: "Conversations and records",
+          showUnreadBadge: true,
+        },
+      ];
   const sidebarThemeClassName = isDark
     ? "border-slate-800 bg-slate-950 text-slate-100"
     : "border-slate-200 bg-white text-slate-900";
@@ -126,13 +139,14 @@ function Sidebar({ mobileOpen = false, onClose = () => {} }) {
         <div className="mb-8 flex items-start justify-between gap-3">
           <div>
             <p className={`text-[11px] uppercase tracking-[0.28em] ${sidebarEyebrowClassName}`}>
-              Doctor Workspace
+              {isAdmin ? "Admin Workspace" : "Doctor Workspace"}
             </p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">
               Omar MedPlus
             </h1>
             <p className={`mt-2 text-sm ${sidebarMutedTextClassName}`}>
-              {currentUser?.name || "Doctor"} | {currentUser?.role || "doctor"}
+              {currentUser?.name || (isAdmin ? "Admin" : "Doctor")} |{" "}
+              {currentUser?.role || (isAdmin ? "admin" : "doctor")}
             </p>
           </div>
 
@@ -204,7 +218,9 @@ function Sidebar({ mobileOpen = false, onClose = () => {} }) {
           </button>
 
           <p className={`mt-4 text-xs ${sidebarMutedTextClassName}`}>
-            Built for fast triage, follow-up and remote care.
+            {isAdmin
+              ? "Built for intake routing, staffing control and clinical oversight."
+              : "Built for fast triage, follow-up and remote care."}
           </p>
           <button
             type="button"

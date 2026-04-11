@@ -6,7 +6,7 @@ export default function BookAppointment() {
   const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState([]);
   const [search, setSearch] = useState("");
-  const [selectedDoctorId, setSelectedDoctorId] = useState(
+  const [preferredDoctorId, setPreferredDoctorId] = useState(
     searchParams.get("doctor") || "",
   );
   const [appointmentDate, setAppointmentDate] = useState("");
@@ -41,24 +41,31 @@ export default function BookAppointment() {
     );
   }, [doctors, search]);
 
-  const submitAppointment = async (e) => {
-    e.preventDefault();
+  const selectedPreferredDoctor =
+    doctors.find((doctor) => doctor._id === preferredDoctorId) || null;
+
+  const submitAppointment = async (event) => {
+    event.preventDefault();
     setFeedback("");
 
     try {
       await API.post("/appointments", {
-        doctorId: selectedDoctorId,
+        doctorId: preferredDoctorId || undefined,
         appointmentDate,
         reason,
       });
 
       setReason("");
       setAppointmentDate("");
-      setFeedback("Appointment request sent successfully.");
+      setFeedback(
+        selectedPreferredDoctor
+          ? `Appointment request sent. Admin will route this case and note that you prefer ${selectedPreferredDoctor.name}.`
+          : "Appointment request sent. Admin will route you to the best available doctor.",
+      );
     } catch (error) {
       setFeedback(
         error.response?.data?.message ||
-          "Unable to book appointment right now.",
+          "Unable to request appointment right now.",
       );
     }
   };
@@ -69,19 +76,20 @@ export default function BookAppointment() {
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.22em] text-blue-600">
-              Appointments
+              Intake
             </p>
             <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
-              Find a doctor
+              Search doctors
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-              Search doctors and book with those currently online.
+              Browse doctors who are currently online. Choosing one below sets a
+              preference only; the admin team still controls final routing.
             </p>
           </div>
 
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
             placeholder="Search by name, email, or specialty"
             className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 lg:max-w-sm"
           />
@@ -112,11 +120,16 @@ export default function BookAppointment() {
 
                 <button
                   type="button"
-                  disabled={!doctor.isOnline}
-                  onClick={() => setSelectedDoctorId(doctor._id)}
-                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                  onClick={() => setPreferredDoctorId(doctor._id)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    preferredDoctorId === doctor._id
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
                 >
-                  {selectedDoctorId === doctor._id ? "Selected" : "Book"}
+                  {preferredDoctorId === doctor._id
+                    ? "Preferred doctor"
+                    : "Set preference"}
                 </button>
               </div>
             </div>
@@ -129,29 +142,28 @@ export default function BookAppointment() {
         className="h-fit rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 xl:sticky xl:top-24"
       >
         <h2 className="text-2xl font-semibold sm:text-[1.75rem]">
-          Book appointment
+          Request appointment
         </h2>
         <p className="mb-6 mt-2 text-sm leading-6 text-slate-500 sm:text-base">
-          Pick an online doctor and request a consultation time.
+          Submit your preferred date and reason. Admin will route the request to
+          the right available doctor.
         </p>
 
         <label className="mb-2 block text-sm font-medium text-slate-700">
-          Doctor
+          Preferred doctor
         </label>
         <select
           className="mb-4 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          value={selectedDoctorId}
-          onChange={(e) => setSelectedDoctorId(e.target.value)}
-          required
+          value={preferredDoctorId}
+          onChange={(event) => setPreferredDoctorId(event.target.value)}
         >
-          <option value="">Select an online doctor</option>
-          {doctors
-            .filter((doctor) => doctor.isOnline)
-            .map((doctor) => (
-              <option key={doctor._id} value={doctor._id}>
-                {doctor.name} - {doctor.specialty}
-              </option>
-            ))}
+          <option value="">No preference</option>
+          {doctors.map((doctor) => (
+            <option key={doctor._id} value={doctor._id}>
+              {doctor.name} - {doctor.specialty} (
+              {doctor.isOnline ? "Online" : "Offline"})
+            </option>
+          ))}
         </select>
 
         <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -161,7 +173,7 @@ export default function BookAppointment() {
           type="datetime-local"
           className="mb-4 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           value={appointmentDate}
-          onChange={(e) => setAppointmentDate(e.target.value)}
+          onChange={(event) => setAppointmentDate(event.target.value)}
           required
         />
 
@@ -170,14 +182,14 @@ export default function BookAppointment() {
         </label>
         <textarea
           className="mb-4 min-h-32 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          placeholder="Tell the doctor what you need help with"
+          placeholder="Tell the care team what you need help with"
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(event) => setReason(event.target.value)}
           required
         />
 
         <button className="w-full rounded-2xl bg-blue-600 p-3 font-medium text-white transition hover:bg-blue-700">
-          Request appointment
+          Send appointment request
         </button>
 
         {feedback && (

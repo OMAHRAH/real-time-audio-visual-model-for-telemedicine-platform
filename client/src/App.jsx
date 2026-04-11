@@ -5,6 +5,9 @@ import {
   Routes,
 } from "react-router-dom";
 import { isDoctorUser } from "./auth";
+import { getCurrentUser } from "./auth";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminPatientProfile from "./pages/AdminPatientProfile";
 import Dashboard from "./pages/dashboard.jsx";
 import Login from "./pages/Login";
 import Patients from "./pages/Patients";
@@ -16,6 +19,9 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   const isAuthenticated = isDoctorUser();
+  const currentUser = getCurrentUser();
+  const homeDashboard =
+    currentUser?.role === "admin" ? <AdminDashboard /> : <Dashboard />;
 
   return (
     <Router>
@@ -28,7 +34,7 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              {homeDashboard}
             </ProtectedRoute>
           }
         />
@@ -45,6 +51,18 @@ function App() {
           element={
             <ProtectedRoute>
               <PatientProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/patients/:id"
+          element={
+            <ProtectedRoute>
+              {currentUser?.role === "admin" ? (
+                <AdminPatientProfile />
+              ) : (
+                <Navigate to="/" replace />
+              )}
             </ProtectedRoute>
           }
         />

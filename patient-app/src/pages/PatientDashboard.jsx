@@ -258,7 +258,7 @@ function DoctorSpotlightCard({ doctor }) {
           to={`/appointments/new?doctor=${doctor._id}`}
           className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
         >
-          Book now
+          Prefer for visit
           <ArrowRightIcon />
         </Link>
 
@@ -304,7 +304,6 @@ export default function PatientDashboard() {
   const [latestVital, setLatestVital] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [onlineDoctors, setOnlineDoctors] = useState([]);
-  const [selectedEmergencyDoctor, setSelectedEmergencyDoctor] = useState("");
   const [loading, setLoading] = useState(true);
   const [emergencyState, setEmergencyState] = useState({
     loading: false,
@@ -324,7 +323,6 @@ export default function PatientDashboard() {
         setLatestVital(vitalsRes.data.vitals?.[0] ?? null);
         setAppointments(appointmentsRes.data.appointments ?? []);
         setOnlineDoctors(doctors);
-        setSelectedEmergencyDoctor(doctors[0]?._id || "");
       } catch (error) {
         console.error("Failed to load patient dashboard", error);
       } finally {
@@ -383,9 +381,7 @@ export default function PatientDashboard() {
     });
 
     try {
-      const res = await API.post("/alerts/emergency", {
-        doctorId: selectedEmergencyDoctor || undefined,
-      });
+      const res = await API.post("/alerts/emergency");
 
       setEmergencyState({
         loading: false,
@@ -466,8 +462,14 @@ export default function PatientDashboard() {
               <p className="mt-2 text-sm leading-6 text-blue-50/80">
                 {nextAppointment
                   ? `Doctor ${
-                      nextAppointment.doctor?.name || "will be assigned"
-                    } - ${String(nextAppointment.status || "pending")}`
+                      nextAppointment.doctor?.name ||
+                      nextAppointment.preferredDoctor?.name ||
+                      "will be assigned"
+                    } - ${
+                      nextAppointment.doctor
+                        ? String(nextAppointment.status || "pending")
+                        : "awaiting admin routing"
+                    }`
                   : "Use the appointment flow to reserve your next consultation."}
               </p>
             </div>
@@ -616,34 +618,12 @@ export default function PatientDashboard() {
                     Priority routing
                   </p>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Choose an available doctor or let the system assign the
+                    If you already have an assigned doctor, the alert follows
+                    that care relationship. Otherwise admin will route it to the
                     fastest responder.
                   </p>
                 </div>
               </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Emergency contact target
-              </label>
-              <select
-                className="w-full rounded-2xl border border-rose-200 bg-white p-3 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
-                value={selectedEmergencyDoctor}
-                onChange={(event) =>
-                  setSelectedEmergencyDoctor(event.target.value)
-                }
-              >
-                {onlineDoctors.length === 0 && (
-                  <option value="">Auto-assign available doctor</option>
-                )}
-
-                {onlineDoctors.map((doctor) => (
-                  <option key={doctor._id} value={doctor._id}>
-                    {doctor.name} - {doctor.specialty}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <button

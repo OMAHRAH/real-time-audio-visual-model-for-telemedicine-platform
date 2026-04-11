@@ -126,26 +126,27 @@ function CommandLink({ title, subtitle, to, icon, badge, tone = "light" }) {
   return (
     <Link
       to={to}
-      className={`group relative flex min-h-[7.5rem] flex-col justify-between rounded-3xl border p-4 transition sm:p-5 ${
+      className={`group relative flex min-h-[5.5rem] flex-col justify-between rounded-3xl border p-3.5 transition sm:min-h-[7.25rem] sm:p-5 ${
         isPrimary
           ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
           : "border-slate-200 bg-slate-50 text-slate-900 hover:border-slate-300 hover:bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
-        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${isPrimary ? "bg-white/15" : "bg-white text-blue-700 shadow-sm"}`}>{icon}</span>
+        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl sm:h-10 sm:w-10 ${isPrimary ? "bg-white/15" : "bg-white text-blue-700 shadow-sm"}`}>{icon}</span>
         {badge ? (
           <span className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${isPrimary ? "bg-slate-950 text-white" : "bg-blue-100 text-blue-700"}`}>
             {badge}
           </span>
         ) : null}
       </div>
-      <div className="mt-5">
+
+      <div className="mt-3 sm:mt-5">
         <div className="flex items-center gap-2">
-          <p className="text-base font-semibold">{title}</p>
-          <ArrowRightIcon className="transition group-hover:translate-x-1" />
+          <p className="text-[15px] font-semibold sm:text-base">{title}</p>
+          <ArrowRightIcon className="h-3.5 w-3.5 transition group-hover:translate-x-1 sm:h-4 sm:w-4" />
         </div>
-        <p className={`mt-2 text-sm leading-6 ${isPrimary ? "text-blue-100" : "text-slate-500"}`}>{subtitle}</p>
+        <p className={`mt-1.5 text-xs leading-5 sm:mt-2 sm:text-sm sm:leading-6 ${isPrimary ? "text-blue-100" : "text-slate-500"}`}>{subtitle}</p>
       </div>
     </Link>
   );
@@ -445,21 +446,21 @@ function Dashboard() {
       }
     >
       <div className="space-y-6 lg:space-y-7">
-        <section className="rounded-[2rem] border border-slate-200 bg-white px-5 py-6 shadow-sm sm:px-6 sm:py-8 lg:px-8 lg:py-9">
-          <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-end">
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8 lg:px-8 lg:py-9">
+          <div className="grid gap-4 sm:gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-end">
             <div>
               <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">
                 Care Command Center
               </span>
-              <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              <h2 className="mt-3 max-w-3xl text-[1.85rem] font-semibold tracking-tight text-slate-950 sm:mt-4 sm:text-4xl">
                 {`Welcome back, Dr. ${currentUser?.name || "Doctor"}.`}
               </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:mt-4 sm:text-base sm:leading-7">
                 Triage critical alerts, move through appointments quickly, and
                 keep unread patient conversations from going stale.
               </p>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="mt-5 grid gap-2.5 sm:mt-6 sm:gap-3 sm:grid-cols-3">
                 <CommandLink
                   to="/patients"
                   title="Patient queue"
@@ -484,12 +485,12 @@ function Dashboard() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5">
+            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-4 sm:rounded-[1.75rem] sm:p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium text-emerald-700">Availability</p>
-                    <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                    <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-2xl">
                       {availability ? "Online for live care" : "Offline from queue"}
                     </p>
                   </div>
@@ -503,21 +504,21 @@ function Dashboard() {
                     {availability ? "Active" : "Paused"}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="mt-2 text-sm leading-5 sm:leading-6 text-slate-600">
                   {availability
                     ? "Patients can book, chat, and reach you for urgent review."
                     : "You are hidden from the online doctor queue until you go back online."}
                 </p>
               </div>
 
-              <div className="rounded-[1.75rem] border border-red-100 bg-red-50 p-5">
+              <div className="rounded-[1.5rem] border border-red-100 bg-red-50 p-4 sm:rounded-[1.75rem] sm:p-5">
                 <p className="text-sm font-medium text-red-700">Immediate priority</p>
-                <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-2xl">
                   {latestCriticalAlert
                     ? latestCriticalAlert.patient?.name || "Unassigned patient"
                     : "No active alert"}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
+                <p className="mt-2 text-sm leading-5 sm:leading-6 text-slate-600">
                   {latestCriticalAlert
                     ? `${getVitalSummary(latestCriticalAlert)} - ${formatDateTime(
                         latestCriticalAlert.createdAt,
