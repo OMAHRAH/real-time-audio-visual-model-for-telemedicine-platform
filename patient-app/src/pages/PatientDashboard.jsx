@@ -1,10 +1,301 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/api";
 import { getPatientId, getStoredUser } from "../auth";
 import AppointmentCard from "../components/AppointmentCard";
-import VitalCard from "../components/VitalCard";
 import useUnreadChats from "../hooks/useUnreadChats";
+
+function CalendarIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+    </svg>
+  );
+}
+
+function HeartPulseIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M19 14a7 7 0 0 1-7 7 7 7 0 0 1-7-7" />
+      <path d="M12 21v-4l-3-3 2-2 1 1 3-6 2 4h4" />
+      <path d="M7 4a3 3 0 0 0-3 3c0 1.92 1.55 3.76 3.4 5.4L12 17l4.6-4.6C18.45 10.76 20 8.92 20 7a3 3 0 0 0-5.12-2.12L12 7.76 9.12 4.88A3 3 0 0 0 7 4Z" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M7 10h10" />
+      <path d="M7 14h7" />
+      <path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 1 1 18 0Z" />
+    </svg>
+  );
+}
+
+function DoctorsIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className = "h-4 w-4" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function LightningIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />
+    </svg>
+  );
+}
+
+function QuickActionLink({
+  to,
+  title,
+  subtitle,
+  tone = "light",
+  icon,
+  badge,
+}) {
+  const toneClassName =
+    tone === "primary"
+      ? "border-white/20 bg-white/14 text-white hover:bg-white/20"
+      : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50";
+
+  const subtitleClassName =
+    tone === "primary" ? "text-blue-100/90" : "text-slate-500";
+
+  return (
+    <Link
+      to={to}
+      className={`group relative flex min-h-[7.5rem] flex-col justify-between rounded-3xl border p-4 transition sm:p-5 ${toneClassName}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <span
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${
+            tone === "primary" ? "bg-white/14" : "bg-slate-100"
+          }`}
+        >
+          {icon}
+        </span>
+
+        {badge ? (
+          <span
+            className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${
+              tone === "primary"
+                ? "bg-red-500 text-white"
+                : "bg-blue-50 text-blue-700"
+            }`}
+          >
+            {badge}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-5">
+        <div className="flex items-center gap-2">
+          <p className="text-base font-semibold">{title}</p>
+          <ArrowRightIcon className="h-4 w-4 transition group-hover:translate-x-1" />
+        </div>
+        <p className={`mt-2 text-sm leading-6 ${subtitleClassName}`}>
+          {subtitle}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function MetricCard({ title, value, subtitle, tone, icon }) {
+  const toneMap = {
+    blue: {
+      ring: "border-blue-100",
+      iconWrap: "bg-blue-100 text-blue-700",
+      chip: "bg-blue-50 text-blue-700",
+    },
+    emerald: {
+      ring: "border-emerald-100",
+      iconWrap: "bg-emerald-100 text-emerald-700",
+      chip: "bg-emerald-50 text-emerald-700",
+    },
+    rose: {
+      ring: "border-rose-100",
+      iconWrap: "bg-rose-100 text-rose-700",
+      chip: "bg-rose-50 text-rose-700",
+    },
+    amber: {
+      ring: "border-amber-100",
+      iconWrap: "bg-amber-100 text-amber-700",
+      chip: "bg-amber-50 text-amber-700",
+    },
+  };
+
+  const palette = toneMap[tone] || toneMap.blue;
+
+  return (
+    <div
+      className={`rounded-3xl border bg-white p-5 shadow-sm sm:p-6 ${palette.ring}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-[2rem]">
+            {value}
+          </p>
+        </div>
+
+        <span
+          className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${palette.iconWrap}`}
+        >
+          {icon}
+        </span>
+      </div>
+
+      <p className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${palette.chip}`}>
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+function DoctorSpotlightCard({ doctor }) {
+  const initials = doctor.name
+    ?.split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-sm font-semibold text-blue-700">
+            {initials || "DR"}
+          </div>
+
+          <div>
+            <p className="font-semibold text-slate-900">{doctor.name}</p>
+            <p className="mt-1 text-sm text-slate-500">{doctor.specialty}</p>
+          </div>
+        </div>
+
+        <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+          Online
+        </span>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Link
+          to={`/appointments/new?doctor=${doctor._id}`}
+          className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+        >
+          Book now
+          <ArrowRightIcon />
+        </Link>
+
+        <Link
+          to={`/chat?doctor=${doctor._id}`}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          Open chat
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+const formatShortDateTime = (dateValue) => {
+  const parsed = new Date(dateValue);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Schedule pending";
+  }
+
+  return parsed.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getLatestBloodPressure = (latestVital) => {
+  if (!latestVital) {
+    return "No data";
+  }
+
+  return `${latestVital.systolic || "-"} / ${latestVital.diastolic || "-"}`;
+};
 
 export default function PatientDashboard() {
   const user = getStoredUser();
@@ -46,6 +337,45 @@ export default function PatientDashboard() {
     }
   }, [patientId]);
 
+  const activeAppointments = useMemo(
+    () =>
+      appointments.filter((appointment) =>
+        ["pending", "approved", "scheduled", "confirmed"].includes(
+          String(appointment.status || "").toLowerCase(),
+        ),
+      ),
+    [appointments],
+  );
+
+  const nextAppointment = useMemo(() => {
+    const now = Date.now();
+    const futureAppointments = activeAppointments
+      .filter((appointment) => {
+        const timestamp = new Date(appointment.appointmentDate).getTime();
+
+        return Number.isFinite(timestamp) && timestamp >= now;
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.appointmentDate).getTime() -
+          new Date(right.appointmentDate).getTime(),
+      );
+
+    if (futureAppointments.length > 0) {
+      return futureAppointments[0];
+    }
+
+    return activeAppointments[0] || null;
+  }, [activeAppointments]);
+
+  const latestVitalStatus = latestVital
+    ? latestVital.flagged
+      ? "Doctor already alerted from latest reading"
+      : "Latest reading looks stable"
+    : "No vitals submitted yet";
+
+  const latestVitalStatusTone = latestVital?.flagged ? "rose" : "emerald";
+
   const sendEmergencyAlert = async () => {
     setEmergencyState({
       loading: true,
@@ -72,178 +402,305 @@ export default function PatientDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-6 lg:space-y-7">
+      <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-700 via-sky-600 to-cyan-500 px-5 py-6 text-white shadow-xl sm:px-6 sm:py-8 lg:px-8 lg:py-9">
+        <div className="absolute inset-0">
+          <div className="absolute -right-20 top-0 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-48 w-48 rounded-full bg-sky-300/20 blur-3xl" />
+          <div className="absolute left-1/3 top-1/2 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
+        </div>
+
+        <div className="relative grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
           <div>
-            <p className="text-sm uppercase tracking-[0.25em] text-blue-600">
-              Daily Care
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
-              Welcome back, {user?.name || "Patient"}
+            <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-50">
+              Personal Care Desk
+            </span>
+
+            <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+              Welcome back, {user?.name || "Patient"}.
             </h2>
-            <p className="text-slate-500 mt-3 max-w-2xl">
-              Book appointments, submit your daily vitals, reach online
-              doctors, and trigger urgent support from one place.
+
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-blue-50/90 sm:text-base">
+              Keep appointments, vitals, doctor access, and emergency support in
+              one polished workflow designed for fast daily check-ins.
             </p>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <QuickActionLink
+                to="/appointments/new"
+                title="Book appointment"
+                subtitle="Reserve a consultation with available doctors."
+                tone="primary"
+                icon={<CalendarIcon />}
+              />
+              <QuickActionLink
+                to="/vitals"
+                title="Submit vitals"
+                subtitle="Send blood pressure and glucose readings."
+                icon={<HeartPulseIcon />}
+              />
+              <QuickActionLink
+                to="/chat"
+                title="Open chat"
+                subtitle="Reply to doctors and continue consultations."
+                icon={<ChatBubbleIcon />}
+                badge={
+                  totalUnreadConversations > 0
+                    ? totalUnreadConversations
+                    : undefined
+                }
+              />
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:flex lg:flex-wrap">
-            <Link
-              to="/appointments/new"
-              className="rounded-full bg-blue-600 px-5 py-3 text-center text-white"
-            >
-              Book appointment
-            </Link>
-            <Link
-              to="/vitals"
-              className="rounded-full border border-slate-300 px-5 py-3 text-center"
-            >
-              Submit vitals
-            </Link>
-            <Link
-              to="/chat"
-              className="relative rounded-full border border-slate-300 px-5 py-3 text-center"
-            >
-              Open chat
-              {totalUnreadConversations > 0 && (
-                <span className="absolute -right-2 -top-2 min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
-                  {totalUnreadConversations}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="rounded-[1.75rem] border border-white/15 bg-white/12 p-5 backdrop-blur">
+              <p className="text-sm font-medium text-blue-50/85">
+                Next visit
+              </p>
+              <p className="mt-3 text-2xl font-semibold tracking-tight">
+                {nextAppointment
+                  ? formatShortDateTime(nextAppointment.appointmentDate)
+                  : "No visit booked"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-blue-50/80">
+                {nextAppointment
+                  ? `Doctor ${
+                      nextAppointment.doctor?.name || "will be assigned"
+                    } - ${String(nextAppointment.status || "pending")}`
+                  : "Use the appointment flow to reserve your next consultation."}
+              </p>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-white/15 bg-slate-950/20 p-5 backdrop-blur">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-blue-50/85">
+                    Care pulse
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight">
+                    {latestVital ? getLatestBloodPressure(latestVital) : "--"}
+                  </p>
+                </div>
+
+                <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white">
+                  {onlineDoctors.length} doctor
+                  {onlineDoctors.length === 1 ? "" : "s"} online
                 </span>
-              )}
-            </Link>
+              </div>
+
+              <p className="mt-2 text-sm leading-6 text-blue-50/80">
+                {latestVital
+                  ? `Glucose ${latestVital.glucoseLevel || "--"} - ${latestVitalStatus}`
+                  : "Your latest submission will appear here after you log it."}
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <p className="text-sm text-slate-500">Online doctors</p>
-          <p className="text-3xl font-semibold mt-2">{onlineDoctors.length}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <p className="text-sm text-slate-500">Upcoming appointments</p>
-          <p className="text-3xl font-semibold mt-2">{appointments.length}</p>
-        </div>
-
-        <VitalCard
-          title="Latest Blood Pressure"
-          value={
-            latestVital
-              ? `${latestVital.systolic || "-"} / ${latestVital.diastolic || "-"}`
-              : "No data"
+        <MetricCard
+          title="Online doctors"
+          value={onlineDoctors.length}
+          subtitle={
+            onlineDoctors.length > 0
+              ? "Available for appointment and chat"
+              : "No doctors online right now"
           }
+          tone="blue"
+          icon={<DoctorsIcon />}
         />
 
-        <VitalCard
-          title="Latest Glucose"
-          value={latestVital?.glucoseLevel || "No data"}
+        <MetricCard
+          title="Active appointments"
+          value={activeAppointments.length}
+          subtitle={
+            nextAppointment
+              ? `Next: ${formatShortDateTime(nextAppointment.appointmentDate)}`
+              : "Nothing scheduled yet"
+          }
+          tone="amber"
+          icon={<CalendarIcon />}
+        />
+
+        <MetricCard
+          title="Latest blood pressure"
+          value={getLatestBloodPressure(latestVital)}
+          subtitle={latestVitalStatus}
+          tone={latestVitalStatusTone}
+          icon={<HeartPulseIcon />}
+        />
+
+        <MetricCard
+          title="Unread doctor replies"
+          value={totalUnreadConversations}
+          subtitle={
+            totalUnreadConversations > 0
+              ? "Open chat to review unattended replies"
+              : "No unread messages waiting"
+          }
+          tone="emerald"
+          icon={<ChatBubbleIcon />}
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <h3 className="text-xl font-semibold">Online doctors</h3>
-            <Link to="/appointments/new" className="text-blue-600 text-sm">
-              Search and book
+      <section className="grid gap-6 xl:grid-cols-[1.14fr_0.86fr]">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.2em] text-blue-600">
+                Available Doctors
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                Ready for consultation
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
+                Reach doctors who are live in the system right now.
+              </p>
+            </div>
+
+            <Link
+              to="/appointments/new"
+              className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-700"
+            >
+              Search all doctors
+              <ArrowRightIcon />
             </Link>
           </div>
 
           {loading ? (
-            <p className="text-slate-500">Loading doctors...</p>
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+              Loading doctors...
+            </div>
           ) : onlineDoctors.length === 0 ? (
-            <p className="text-slate-500">
-              No doctors are currently online.
-            </p>
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+              <p className="text-base font-medium text-slate-700">
+                No doctors are currently online.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                You can still schedule an appointment for later from the booking
+                screen.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-4">
-              {onlineDoctors.slice(0, 3).map((doctor) => (
-                <div
-                  key={doctor._id}
-                  className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <p className="font-medium">{doctor.name}</p>
-                    <p className="text-sm text-slate-500">{doctor.specialty}</p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-xs font-medium">
-                      Online
-                    </span>
-                    <Link
-                      to={`/appointments/new?doctor=${doctor._id}`}
-                      className="text-sm font-medium text-blue-600"
-                    >
-                      Book now
-                    </Link>
-                  </div>
-                </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {onlineDoctors.slice(0, 4).map((doctor) => (
+                <DoctorSpotlightCard key={doctor._id} doctor={doctor} />
               ))}
             </div>
           )}
         </div>
 
-        <div className="rounded-3xl border border-red-100 bg-red-50 p-5 sm:p-6">
-          <p className="text-sm uppercase tracking-[0.25em] text-red-600">
-            Emergency
-          </p>
-          <h3 className="text-2xl font-semibold mt-2 text-slate-900">
-            Need urgent help?
-          </h3>
-          <p className="text-slate-600 mt-3">
-            Send an emergency alert to an available doctor immediately.
-          </p>
-
-          <select
-            className="w-full mt-5 border border-red-200 rounded-2xl p-3 bg-white"
-            value={selectedEmergencyDoctor}
-            onChange={(e) => setSelectedEmergencyDoctor(e.target.value)}
-          >
-            {onlineDoctors.length === 0 && (
-              <option value="">Auto-assign available doctor</option>
-            )}
-
-            {onlineDoctors.map((doctor) => (
-              <option key={doctor._id} value={doctor._id}>
-                {doctor.name} - {doctor.specialty}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={sendEmergencyAlert}
-            disabled={emergencyState.loading}
-            className="mt-4 w-full rounded-2xl bg-red-600 p-3 text-white disabled:bg-red-300"
-          >
-            {emergencyState.loading ? "Sending emergency alert..." : "Push emergency button"}
-          </button>
-
-          {emergencyState.message && (
-            <p className="text-sm mt-3 text-slate-700">
-              {emergencyState.message}
+        <div className="overflow-hidden rounded-[2rem] border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-orange-50 shadow-sm">
+          <div className="border-b border-rose-100 px-5 py-5 sm:px-6">
+            <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
+              Emergency Support
+            </span>
+            <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+              Escalate urgent symptoms immediately
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+              Use this only when you need rapid intervention from the care team.
             </p>
-          )}
+          </div>
+
+          <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="rounded-3xl border border-rose-100 bg-white/80 p-4 backdrop-blur sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+                  <LightningIcon />
+                </span>
+                <div>
+                  <p className="font-medium text-slate-900">
+                    Priority routing
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Choose an available doctor or let the system assign the
+                    fastest responder.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Emergency contact target
+              </label>
+              <select
+                className="w-full rounded-2xl border border-rose-200 bg-white p-3 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
+                value={selectedEmergencyDoctor}
+                onChange={(event) =>
+                  setSelectedEmergencyDoctor(event.target.value)
+                }
+              >
+                {onlineDoctors.length === 0 && (
+                  <option value="">Auto-assign available doctor</option>
+                )}
+
+                {onlineDoctors.map((doctor) => (
+                  <option key={doctor._id} value={doctor._id}>
+                    {doctor.name} - {doctor.specialty}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={sendEmergencyAlert}
+              disabled={emergencyState.loading}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-3 font-medium text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+            >
+              <LightningIcon className="h-4 w-4" />
+              {emergencyState.loading
+                ? "Sending emergency alert..."
+                : "Push emergency button"}
+            </button>
+
+            {emergencyState.message && (
+              <div className="rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+                {emergencyState.message}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h3 className="text-xl font-semibold">Recent appointments</h3>
-          <Link to="/appointments" className="text-blue-600 text-sm">
-            View all
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.2em] text-blue-600">
+              Appointment Feed
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+              Recent appointments
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
+              Review your latest bookings and any notes from doctors.
+            </p>
+          </div>
+
+          <Link
+            to="/appointments"
+            className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-700"
+          >
+            View full history
+            <ArrowRightIcon />
           </Link>
         </div>
 
         {appointments.length === 0 ? (
-          <p className="text-slate-500">
-            No appointments yet. Book your first consultation.
-          </p>
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+            <p className="text-base font-medium text-slate-700">
+              No appointments yet.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Book your first consultation to start your care timeline.
+            </p>
+          </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             {appointments.slice(0, 4).map((appointment) => (
               <AppointmentCard key={appointment._id} appointment={appointment} />
             ))}

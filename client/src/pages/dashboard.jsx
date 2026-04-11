@@ -1,26 +1,204 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../api/api";
 import { getCurrentUser, storeCurrentUser } from "../auth";
 import DoctorShell from "../components/DoctorShell";
 import useUnreadPatientMessages from "../hooks/useUnreadPatientMessages";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 import { io } from "socket.io-client";
 
 const socket = io("http://localhost:5000");
 
-const surfaceClass = "rounded-3xl border border-slate-200 bg-white shadow-sm";
+function UsersIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+    </svg>
+  );
+}
+
+function AlertIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+function ChatIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7 10h10" />
+      <path d="M7 14h7" />
+      <path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 1 1 18 0Z" />
+    </svg>
+  );
+}
+
+function ActivityIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M22 12h-4l-3 9-6-18-3 9H2" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className = "h-4 w-4" }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function StatCard({ title, value, subtitle, tone, icon }) {
+  const toneClasses = {
+    blue: {
+      border: "border-slate-200",
+      accent: "bg-blue-600",
+      icon: "bg-blue-50 text-blue-700",
+      text: "text-blue-700",
+    },
+    emerald: {
+      border: "border-slate-200",
+      accent: "bg-emerald-600",
+      icon: "bg-emerald-50 text-emerald-700",
+      text: "text-emerald-700",
+    },
+    rose: {
+      border: "border-slate-200",
+      accent: "bg-red-600",
+      icon: "bg-red-50 text-red-700",
+      text: "text-red-700",
+    },
+    amber: {
+      border: "border-slate-200",
+      accent: "bg-amber-500",
+      icon: "bg-amber-50 text-amber-700",
+      text: "text-amber-700",
+    },
+  };
+  const palette = toneClasses[tone] || toneClasses.blue;
+
+  return (
+    <div className={`rounded-[1.75rem] border bg-white p-5 shadow-sm sm:p-6 ${palette.border}`}>
+      <div className={`mb-5 h-1.5 w-16 rounded-full ${palette.accent}`} />
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-[2rem]">{value}</p>
+        </div>
+        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${palette.icon}`}>{icon}</span>
+      </div>
+      <p className={`mt-4 text-sm leading-6 ${palette.text}`}>{subtitle}</p>
+    </div>
+  );
+}
+
+function CommandLink({ title, subtitle, to, icon, badge, tone = "light" }) {
+  const isPrimary = tone === "primary";
+
+  return (
+    <Link
+      to={to}
+      className={`group relative flex min-h-[7.5rem] flex-col justify-between rounded-3xl border p-4 transition sm:p-5 ${
+        isPrimary
+          ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+          : "border-slate-200 bg-slate-50 text-slate-900 hover:border-slate-300 hover:bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${isPrimary ? "bg-white/15" : "bg-white text-blue-700 shadow-sm"}`}>{icon}</span>
+        {badge ? (
+          <span className={`inline-flex min-w-7 items-center justify-center rounded-full px-2 py-1 text-xs font-semibold ${isPrimary ? "bg-slate-950 text-white" : "bg-blue-100 text-blue-700"}`}>
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-5">
+        <div className="flex items-center gap-2">
+          <p className="text-base font-semibold">{title}</p>
+          <ArrowRightIcon className="transition group-hover:translate-x-1" />
+        </div>
+        <p className={`mt-2 text-sm leading-6 ${isPrimary ? "text-blue-100" : "text-slate-500"}`}>{subtitle}</p>
+      </div>
+    </Link>
+  );
+}
+
+function QueueCard({ title, subtitle, tone, action, children }) {
+  return (
+    <section className={`rounded-[2rem] border p-5 shadow-sm sm:p-6 ${tone === "rose" ? "border-red-100 bg-white" : "border-slate-200 bg-white"}`}>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">{subtitle}</p>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const getPatientId = (patient) => {
+  if (!patient) return null;
+  return typeof patient === "string" ? patient : patient._id;
+};
+
+const getVitalSummary = (vital) => {
+  const values = [];
+  if (vital.systolic || vital.diastolic) {
+    values.push(`BP ${vital.systolic || "-"}/${vital.diastolic || "-"}`);
+  }
+  if (vital.glucoseLevel) {
+    values.push(`Glucose ${vital.glucoseLevel}`);
+  }
+  return values.join(" | ") || "Critical vital reading";
+};
+
+const formatDateTime = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Schedule pending";
+  }
+  return date.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
 function Dashboard() {
   const navigate = useNavigate();
+  const currentUser = getCurrentUser();
   const { totalUnreadConversations, unreadCountsByPatient } =
     useUnreadPatientMessages();
   const [stats, setStats] = useState({
@@ -34,7 +212,7 @@ function Dashboard() {
   const [alerts, setAlerts] = useState([]);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
   const [availability, setAvailability] = useState(
-    getCurrentUser()?.isOnline !== false,
+    currentUser?.isOnline !== false,
   );
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [resolvingAlertId, setResolvingAlertId] = useState(null);
@@ -43,7 +221,6 @@ function Dashboard() {
     const fetchDashboard = async () => {
       try {
         const res = await API.get("/dashboard");
-
         setStats({
           patients: res.data.totalPatients,
           appointments: res.data.pendingAppointments,
@@ -75,7 +252,6 @@ function Dashboard() {
     const fetchAlerts = async () => {
       try {
         const res = await API.get("/vitals/alerts");
-
         setAlerts(res.data || []);
         setStats((prev) => ({
           ...prev,
@@ -145,12 +321,11 @@ function Dashboard() {
 
       setAvailability(res.data.doctor.isOnline);
 
-      const currentUser = getCurrentUser() || {};
+      const doctor = res.data.doctor;
       storeCurrentUser({
-        ...currentUser,
-        ...res.data.doctor,
-        id: res.data.doctor.id,
-        role: currentUser.role || "doctor",
+        ...(getCurrentUser() || {}),
+        ...doctor,
+        id: doctor.id,
       });
     } catch (error) {
       console.error("Failed to update doctor availability", error);
@@ -159,37 +334,14 @@ function Dashboard() {
     }
   };
 
-  const getPatientId = (patient) => {
-    if (!patient) return null;
-
-    return typeof patient === "string" ? patient : patient._id;
-  };
-
   const openAppointmentChat = (appointment) => {
     const patientId = getPatientId(appointment.patient);
-
     if (!patientId) return;
-
     navigate(`/patients/${patientId}?chat=1&appointment=${appointment._id}`);
-  };
-
-  const getVitalSummary = (vital) => {
-    const values = [];
-
-    if (vital.systolic || vital.diastolic) {
-      values.push(`BP ${vital.systolic || "-"}/${vital.diastolic || "-"}`);
-    }
-
-    if (vital.glucoseLevel) {
-      values.push(`Glucose ${vital.glucoseLevel}`);
-    }
-
-    return values.join(" | ") || "Critical vital reading";
   };
 
   const openAlertChat = async (alert) => {
     const patientId = getPatientId(alert.patient);
-
     if (!patientId || resolvingAlertId) return;
 
     setResolvingAlertId(alert._id);
@@ -199,7 +351,6 @@ function Dashboard() {
 
       setAlerts((prev) => {
         const nextAlerts = prev.filter((item) => item._id !== alert._id);
-
         setStats((prevStats) => ({
           ...prevStats,
           alerts: nextAlerts.length,
@@ -223,7 +374,9 @@ function Dashboard() {
   const chartData = vitals.map((vital) => {
     const systolic =
       vital.systolic ||
-      (vital.bloodPressure ? parseInt(vital.bloodPressure.split("/")[0], 10) : 0);
+      (vital.bloodPressure
+        ? parseInt(vital.bloodPressure.split("/")[0], 10)
+        : 0);
 
     return {
       name: vital.patient?.name || "Patient",
@@ -231,6 +384,42 @@ function Dashboard() {
       glucose: vital.glucoseLevel || vital.bloodSugar || 0,
     };
   });
+
+  const nextAppointment = useMemo(() => {
+    const now = Date.now();
+    const activeAppointments = appointments
+      .filter((appointment) => {
+        const timestamp = new Date(appointment.appointmentDate).getTime();
+        return Number.isFinite(timestamp) && timestamp >= now;
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.appointmentDate).getTime() -
+          new Date(right.appointmentDate).getTime(),
+      );
+
+    return activeAppointments[0] || appointments[0] || null;
+  }, [appointments]);
+
+  const patientsNeedingAttention = useMemo(
+    () =>
+      patients
+        .map((patient) => ({
+          ...patient,
+          unread: unreadCountsByPatient[patient._id] || 0,
+        }))
+        .sort((left, right) => right.unread - left.unread)
+        .slice(0, 5),
+    [patients, unreadCountsByPatient],
+  );
+
+  const unresolvedPatientCount = useMemo(
+    () =>
+      Object.values(unreadCountsByPatient).filter((count) => count > 0).length,
+    [unreadCountsByPatient],
+  );
+
+  const latestCriticalAlert = alerts[0] || null;
 
   return (
     <DoctorShell
@@ -255,191 +444,313 @@ function Dashboard() {
         </button>
       }
     >
-      <div className="space-y-6">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Link
-            to="/patients"
-            className={`relative p-6 transition hover:-translate-y-0.5 hover:shadow-md ${surfaceClass}`}
-          >
-            {totalUnreadConversations > 0 && (
-              <span className="absolute right-5 top-5 min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
-                {totalUnreadConversations}
+      <div className="space-y-6 lg:space-y-7">
+        <section className="rounded-[2rem] border border-slate-200 bg-white px-5 py-6 shadow-sm sm:px-6 sm:py-8 lg:px-8 lg:py-9">
+          <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-end">
+            <div>
+              <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700">
+                Care Command Center
               </span>
-            )}
-            <p className="text-sm font-medium text-slate-500">Patients</p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight">
-              {stats.patients}
-            </p>
-            <p className="mt-3 text-sm text-blue-600">Open patient records</p>
-          </Link>
+              <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                {`Welcome back, Dr. ${currentUser?.name || "Doctor"}.`}
+              </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                Triage critical alerts, move through appointments quickly, and
+                keep unread patient conversations from going stale.
+              </p>
 
-          <div className={`p-6 ${surfaceClass}`}>
-            <p className="text-sm font-medium text-slate-500">
-              Pending Appointments
-            </p>
-            <p className="mt-3 text-3xl font-semibold tracking-tight">
-              {stats.appointments}
-            </p>
-            <p className="mt-3 text-sm text-slate-500">
-              Recent bookings and consultations waiting for follow-up.
-            </p>
-          </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <CommandLink
+                  to="/patients"
+                  title="Patient queue"
+                  subtitle="Move through records and active conversations."
+                  tone="primary"
+                  badge={totalUnreadConversations > 0 ? totalUnreadConversations : undefined}
+                  icon={<UsersIcon />}
+                />
+                <CommandLink
+                  to="/patients"
+                  title="Unread chats"
+                  subtitle="Open the patient list with unread badges in context."
+                  icon={<ChatIcon />}
+                  badge={unresolvedPatientCount > 0 ? unresolvedPatientCount : undefined}
+                />
+                <CommandLink
+                  to="/patients"
+                  title="Appointment follow-up"
+                  subtitle="Jump into consultations waiting for response."
+                  icon={<CalendarIcon />}
+                />
+              </div>
+            </div>
 
-          <div className={`p-6 ${surfaceClass}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Critical Alerts
-                </p>
-                <p className="mt-3 text-3xl font-semibold tracking-tight text-red-500">
-                  {stats.alerts}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-700">Availability</p>
+                    <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                      {availability ? "Online for live care" : "Offline from queue"}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                      availability
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-700 text-white"
+                    }`}
+                  >
+                    {availability ? "Active" : "Paused"}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {availability
+                    ? "Patients can book, chat, and reach you for urgent review."
+                    : "You are hidden from the online doctor queue until you go back online."}
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowAlertDetails((prev) => !prev)}
-                className="rounded-full bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100"
-              >
-                {showAlertDetails ? "Close details" : "Open details"}
-              </button>
+              <div className="rounded-[1.75rem] border border-red-100 bg-red-50 p-5">
+                <p className="text-sm font-medium text-red-700">Immediate priority</p>
+                <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                  {latestCriticalAlert
+                    ? latestCriticalAlert.patient?.name || "Unassigned patient"
+                    : "No active alert"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {latestCriticalAlert
+                    ? `${getVitalSummary(latestCriticalAlert)} - ${formatDateTime(
+                        latestCriticalAlert.createdAt,
+                      )}`
+                    : "Your critical queue is currently clear."}
+                </p>
+              </div>
             </div>
-            <p className="mt-3 text-sm text-slate-500">
-              Prioritize the latest critical submissions from patients.
-            </p>
           </div>
         </section>
 
-        <section
-          className={`grid gap-6 ${
-            showAlertDetails
-              ? "xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]"
-              : "grid-cols-1"
-          }`}
-        >
-          <div className={`p-6 ${surfaceClass}`}>
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-semibold">Patients</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Quick access to active conversations and recent profiles.
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Patients"
+            value={stats.patients}
+            subtitle="Registered patients in your workspace"
+            tone="blue"
+            icon={<UsersIcon />}
+          />
+          <StatCard
+            title="Pending appointments"
+            value={stats.appointments}
+            subtitle={
+              nextAppointment
+                ? `Next: ${formatDateTime(nextAppointment.appointmentDate)}`
+                : "No pending appointment in queue"
+            }
+            tone="amber"
+            icon={<CalendarIcon />}
+          />
+          <StatCard
+            title="Critical alerts"
+            value={stats.alerts}
+            subtitle={
+              stats.alerts > 0
+                ? "Needs urgent clinical review"
+                : "No unresolved critical readings"
+            }
+            tone="rose"
+            icon={<AlertIcon />}
+          />
+          <StatCard
+            title="Unread conversations"
+            value={totalUnreadConversations}
+            subtitle={
+              totalUnreadConversations > 0
+                ? `${unresolvedPatientCount} patient conversations waiting`
+                : "Inbox is fully attended"
+            }
+            tone="emerald"
+            icon={<ChatIcon />}
+          />
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[1.18fr_0.82fr]">
+          <QueueCard
+            title="Patient focus"
+            subtitle="Quick access to patients who currently need review or a response."
+            tone="slate"
+            action={
+              <Link
+                to="/patients"
+                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-700"
+              >
+                Open full patient list
+                <ArrowRightIcon />
+              </Link>
+            }
+          >
+            {patientsNeedingAttention.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+                <p className="text-base font-medium text-slate-700">
+                  No patients loaded yet.
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Patient records will appear here as they register or send new
+                  messages.
                 </p>
               </div>
-
-              <Link to="/patients" className="text-sm font-medium text-blue-600">
-                View all
-              </Link>
-            </div>
-
-            {patients.length === 0 ? (
-              <p className="text-sm text-slate-500">No patients found.</p>
             ) : (
               <div className="space-y-3">
-                {patients.slice(0, 5).map((patient) => (
+                {patientsNeedingAttention.map((patient) => (
                   <Link
                     key={patient._id}
                     to={`/patients/${patient._id}`}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50"
+                    className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white px-4 py-4 transition hover:border-blue-200 hover:bg-blue-50 sm:px-5"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">
-                        {patient.name}
-                      </p>
-                      <p className="truncate text-sm text-slate-500">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-semibold text-slate-900">
+                          {patient.name}
+                        </p>
+                        {patient.unread > 0 && (
+                          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                            {patient.unread}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-sm text-slate-500">
                         {patient.email}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-400">
+                        {patient.lastAppointment
+                          ? `Last appointment ${formatDateTime(
+                              patient.lastAppointment,
+                            )}`
+                          : "No previous appointment recorded"}
                       </p>
                     </div>
 
-                    {unreadCountsByPatient[patient._id] > 0 && (
-                      <span className="min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
-                        {unreadCountsByPatient[patient._id]}
-                      </span>
-                    )}
+                    <span className="hidden text-sm font-medium text-blue-600 sm:inline-flex">
+                      Open
+                    </span>
                   </Link>
                 ))}
               </div>
             )}
-          </div>
+          </QueueCard>
 
-          {showAlertDetails && (
-            <div id="critical-alerts" className={`p-6 ${surfaceClass}`}>
-              <div className="mb-4">
-                <h3 className="text-xl font-semibold">Critical Alerts</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Open an alert to jump straight into the patient conversation.
-                </p>
+          <QueueCard
+            title="Critical queue"
+            subtitle="Resolve each flagged submission by opening the patient chat."
+            tone="rose"
+            action={
+              <button
+                type="button"
+                onClick={() => setShowAlertDetails((prev) => !prev)}
+                className="rounded-full bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-200"
+              >
+                {showAlertDetails ? "Collapse queue" : "Open queue"}
+              </button>
+            }
+          >
+            {!showAlertDetails ? (
+              <div className="rounded-3xl border border-red-100 bg-white px-4 py-6 sm:px-5">
+                <div className="flex items-start gap-4">
+                  <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                    <AlertIcon />
+                  </span>
+                  <div>
+                    <p className="text-base font-semibold text-slate-900">
+                      {stats.alerts > 0
+                        ? `${stats.alerts} alert${stats.alerts === 1 ? "" : "s"} waiting`
+                        : "No unresolved alerts"}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {latestCriticalAlert
+                        ? `Most recent: ${
+                            latestCriticalAlert.patient?.name || "Unknown patient"
+                          } - ${getVitalSummary(latestCriticalAlert)}`
+                        : "When patients submit critical vitals, the queue will show up here."}
+                    </p>
+                  </div>
+                </div>
               </div>
-
-              {alerts.length === 0 ? (
-                <p className="text-sm text-slate-500">
+            ) : alerts.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-red-200 bg-white px-4 py-10 text-center">
+                <p className="text-base font-medium text-slate-700">
                   No active critical alerts.
                 </p>
-              ) : (
-                <div className="space-y-3">
-                  {alerts.map((alert) => {
-                    const patientId = getPatientId(alert.patient);
-                    const patientName = alert.patient?.name || "Unknown patient";
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  The queue clears automatically as soon as you open and resolve
+                  the alert.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {alerts.map((alert) => {
+                  const patientId = getPatientId(alert.patient);
+                  const patientName = alert.patient?.name || "Unknown patient";
 
-                    return patientId ? (
-                      <button
-                        key={alert._id}
-                        type="button"
-                        onClick={() => openAlertChat(alert)}
-                        disabled={resolvingAlertId === alert._id}
-                        className="block w-full rounded-2xl border border-red-100 bg-red-50 p-4 text-left transition hover:bg-red-100 disabled:opacity-60"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-red-700">
-                              {patientName}
-                            </p>
-                            <p className="mt-1 text-sm text-slate-700">
-                              {getVitalSummary(alert)}
-                            </p>
-                            <p className="mt-2 text-xs text-slate-500">
-                              {new Date(alert.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-
-                          <span className="shrink-0 text-sm font-medium text-red-700">
-                            {resolvingAlertId === alert._id
-                              ? "Opening..."
-                              : "Open chat"}
-                          </span>
+                  return patientId ? (
+                    <button
+                      key={alert._id}
+                      type="button"
+                      onClick={() => openAlertChat(alert)}
+                      disabled={resolvingAlertId === alert._id}
+                      className="block w-full rounded-3xl border border-red-100 bg-white p-4 text-left transition hover:bg-red-50 disabled:opacity-60 sm:p-5"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-red-700">
+                            {patientName}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">
+                            {getVitalSummary(alert)}
+                          </p>
+                          <p className="mt-3 text-xs text-slate-500">
+                            {formatDateTime(alert.createdAt)}
+                          </p>
                         </div>
-                      </button>
-                    ) : (
-                      <div
-                        key={alert._id}
-                        className="rounded-2xl border border-red-100 bg-red-50 p-4"
-                      >
-                        <p className="font-semibold text-red-700">
-                          {patientName}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-700">
-                          {getVitalSummary(alert)}
-                        </p>
+
+                        <span className="shrink-0 text-sm font-medium text-red-700">
+                          {resolvingAlertId === alert._id
+                            ? "Opening..."
+                            : "Open chat"}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+                    </button>
+                  ) : (
+                    <div
+                      key={alert._id}
+                      className="rounded-3xl border border-red-100 bg-white p-4"
+                    >
+                      <p className="font-semibold text-red-700">
+                        {patientName}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {getVitalSummary(alert)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </QueueCard>
         </section>
 
-        <section className={`p-6 ${surfaceClass}`}>
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold">Recent Appointments</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Tap an appointment to open the patient chat with the appointment reason in context.
-            </p>
-          </div>
-
+        <QueueCard
+          title="Appointment queue"
+          subtitle="Open any appointment to jump directly into the patient chat with the reason already in context."
+          tone="slate"
+        >
           {appointments.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No appointments scheduled yet.
-            </p>
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+              <p className="text-base font-medium text-slate-700">
+                No appointments scheduled yet.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                New booking requests will surface here as patients schedule
+                appointments.
+              </p>
+            </div>
           ) : (
             <>
               <div className="space-y-3 md:hidden">
@@ -448,7 +759,7 @@ function Dashboard() {
                     key={appointment._id}
                     type="button"
                     onClick={() => openAppointmentChat(appointment)}
-                    className="w-full rounded-2xl border border-slate-200 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                    className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
@@ -456,9 +767,7 @@ function Dashboard() {
                           {appointment.patient?.name || "Unknown"}
                         </p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {new Date(
-                            appointment.appointmentDate,
-                          ).toLocaleDateString()}
+                          {formatDateTime(appointment.appointmentDate)}
                         </p>
                       </div>
 
@@ -479,7 +788,7 @@ function Dashboard() {
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-sm text-slate-500">
                       <th className="py-3 pr-4 font-medium">Patient</th>
-                      <th className="py-3 pr-4 font-medium">Date</th>
+                      <th className="py-3 pr-4 font-medium">Scheduled</th>
                       <th className="py-3 pr-4 font-medium">Status</th>
                       <th className="py-3 font-medium">Action</th>
                     </tr>
@@ -497,9 +806,7 @@ function Dashboard() {
                         </td>
 
                         <td className="py-4 pr-4 text-slate-600">
-                          {new Date(
-                            appointment.appointmentDate,
-                          ).toLocaleDateString()}
+                          {formatDateTime(appointment.appointmentDate)}
                         </td>
 
                         <td className="py-4 pr-4">
@@ -527,16 +834,15 @@ function Dashboard() {
               </div>
             </>
           )}
-        </section>
+        </QueueCard>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <div className={`p-6 ${surfaceClass}`}>
-            <h3 className="text-xl font-semibold">Blood Pressure Trend</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Latest systolic readings from recent patient submissions.
-            </p>
-
-            <div className="mt-5 h-[280px] sm:h-[320px]">
+          <QueueCard
+            title="Blood pressure trend"
+            subtitle="Latest systolic readings from recent patient submissions."
+            tone="slate"
+          >
+            <div className="h-[280px] sm:h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -548,19 +854,19 @@ function Dashboard() {
                     dataKey="systolic"
                     stroke="#2563eb"
                     strokeWidth={3}
+                    dot={{ r: 3 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </QueueCard>
 
-          <div className={`p-6 ${surfaceClass}`}>
-            <h3 className="text-xl font-semibold">Glucose Trend</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Glucose changes across the latest monitored patients.
-            </p>
-
-            <div className="mt-5 h-[280px] sm:h-[320px]">
+          <QueueCard
+            title="Glucose trend"
+            subtitle="Glucose changes across the latest monitored patients."
+            tone="slate"
+          >
+            <div className="h-[280px] sm:h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -572,9 +878,76 @@ function Dashboard() {
                     dataKey="glucose"
                     stroke="#dc2626"
                     strokeWidth={3}
+                    dot={{ r: 3 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+          </QueueCard>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                <CalendarIcon />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Next appointment
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-950">
+                  {nextAppointment
+                    ? nextAppointment.patient?.name || "Unknown patient"
+                    : "No upcoming appointment"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {nextAppointment
+                    ? formatDateTime(nextAppointment.appointmentDate)
+                    : "When new appointments land, the next consult will show here."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <ActivityIcon />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Readings monitored
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-950">
+                  {vitals.length}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Recent blood pressure and glucose submissions available for
+                  trend review.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                <AlertIcon />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Critical response posture
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-950">
+                  {alerts.length > 0 ? "Escalated" : "Stable"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {alerts.length > 0
+                    ? "At least one patient has a flagged vital requiring review."
+                    : "No current flagged submissions in the queue."}
+                </p>
+              </div>
             </div>
           </div>
         </section>

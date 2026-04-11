@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { getStoredUser, logout } from "../auth";
 import useUnreadChats from "../hooks/useUnreadChats";
+import useTheme from "../hooks/useTheme";
 
 function MenuIcon({ className = "h-5 w-5" }) {
   return (
@@ -40,6 +41,48 @@ function CloseIcon({ className = "h-5 w-5" }) {
   );
 }
 
+function MoonIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3c0 0 0 0 0 0A7 7 0 0 0 21 12.79Z" />
+    </svg>
+  );
+}
+
+function SunIcon({ className = "h-5 w-5" }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
 const navItems = [
   {
     to: "/",
@@ -73,6 +116,7 @@ export default function PatientNavbar() {
   const user = getStoredUser();
   const { totalUnreadConversations } = useUnreadChats();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
 
   const closeMobileMenu = useCallback(() => {
     setMobileOpen(false);
@@ -132,6 +176,15 @@ export default function PatientNavbar() {
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/15"
+            >
+              {isDark ? <SunIcon /> : <MoonIcon />}
+              <span>{isDark ? "Light mode" : "Dark mode"}</span>
+            </button>
+
             <div className="text-right">
               <p className="text-sm font-medium">{user?.name || "Patient"}</p>
               <p className="text-xs text-blue-100">{user?.email || ""}</p>
@@ -232,6 +285,22 @@ export default function PatientNavbar() {
             </NavLink>
           ))}
         </nav>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="mt-6 flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-900 transition hover:border-slate-300 hover:bg-slate-100"
+        >
+          <span className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
+              {isDark ? <SunIcon /> : <MoonIcon />}
+            </span>
+            <span>{isDark ? "Light mode" : "Dark mode"}</span>
+          </span>
+          <span className="text-xs text-slate-500">
+            {isDark ? "On" : "Off"}
+          </span>
+        </button>
 
         <button
           type="button"

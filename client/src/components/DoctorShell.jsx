@@ -41,7 +41,7 @@ function DoctorShell({ title, subtitle = "", actions = null, children }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 lg:h-screen lg:overflow-hidden">
+    <div className="min-h-screen bg-slate-100 text-slate-900 transition-colors lg:h-screen lg:overflow-hidden">
       <div className="flex min-h-screen lg:h-screen">
         <Sidebar
           mobileOpen={sidebarOpen}
@@ -49,7 +49,7 @@ function DoctorShell({ title, subtitle = "", actions = null, children }) {
         />
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-72 lg:h-screen lg:overflow-y-auto">
-          <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100/90 backdrop-blur">
+          <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 backdrop-blur transition-colors">
             <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-3">
                 <button
