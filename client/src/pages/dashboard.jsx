@@ -14,8 +14,9 @@ import {
   YAxis,
 } from "recharts";
 import { io } from "socket.io-client";
+import { SOCKET_URL } from "../config/runtime";
 
-const socket = io("http://localhost:5000");
+const socket = io(SOCKET_URL);
 
 function UsersIcon({ className = "h-5 w-5" }) {
   return (

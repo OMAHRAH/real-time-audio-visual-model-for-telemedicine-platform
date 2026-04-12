@@ -2,10 +2,39 @@ import User from "../models/user.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const VALID_ROLES = new Set(["patient", "doctor", "admin"]);
+const STAFF_ROLES = new Set(["doctor", "admin"]);
+
 // REGISTER USER
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role, specialty } = req.body;
+    const { name, email, password, role, specialty, staffBootstrapKey } = req.body;
+    const normalizedRole =
+      typeof role === "string" ? role.trim().toLowerCase() : "patient";
+
+    if (!VALID_ROLES.has(normalizedRole)) {
+      return res.status(400).json({ message: "Invalid role selected" });
+    }
+
+    if (STAFF_ROLES.has(normalizedRole)) {
+      const publicStaffRegistrationAllowed =
+        process.env.ALLOW_PUBLIC_STAFF_REGISTRATION === "true";
+      const expectedBootstrapKey = process.env.STAFF_BOOTSTRAP_KEY?.trim();
+      const providedBootstrapKey =
+        typeof staffBootstrapKey === "string"
+          ? staffBootstrapKey.trim()
+          : "";
+
+      if (
+        !publicStaffRegistrationAllowed &&
+        (!expectedBootstrapKey || providedBootstrapKey !== expectedBootstrapKey)
+      ) {
+        return res.status(403).json({
+          message:
+            "Staff registration is disabled on this deployment. Use the staff bootstrap key or create the account manually.",
+        });
+      }
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -22,7 +51,7 @@ export const register = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role,
+      role: normalizedRole,
       specialty,
     });
 

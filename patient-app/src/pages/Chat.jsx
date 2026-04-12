@@ -3,12 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import API from "../api/api";
 import ConversationCallPanel from "../components/ConversationCallPanel";
+import { SOCKET_URL, resolveServerUrl } from "../config/runtime";
 import { getPatientId, getStoredUser } from "../auth";
 import useConversationCall from "../hooks/useConversationCall";
 import useUnreadChats from "../hooks/useUnreadChats";
 
-const socket = io("http://localhost:5000", { autoConnect: false });
-const SERVER_BASE_URL = "http://localhost:5000";
+const socket = io(SOCKET_URL, { autoConnect: false });
 const CHAT_FILE_ACCEPT =
   ".doc,.docx,.pdf,.txt,image/png,image/jpeg,image/webp,image/gif,audio/*";
 
@@ -377,7 +377,7 @@ export default function Chat() {
   });
 
   const getFileUrl = (fileUrl) => {
-    return fileUrl ? new URL(fileUrl, SERVER_BASE_URL).toString() : "";
+    return fileUrl ? resolveServerUrl(fileUrl) : "";
   };
 
   const selectDoctor = (doctorId) => {

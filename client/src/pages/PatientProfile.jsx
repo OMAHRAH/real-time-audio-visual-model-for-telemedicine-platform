@@ -15,10 +15,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { getCurrentUser } from "../auth";
+import { SOCKET_URL, resolveServerUrl } from "../config/runtime";
 import useConversationCall from "../hooks/useConversationCall";
 
-const socket = io("http://localhost:5000", { autoConnect: false });
-const SERVER_BASE_URL = "http://localhost:5000";
+const socket = io(SOCKET_URL, { autoConnect: false });
 const CHAT_FILE_ACCEPT =
   ".doc,.docx,.pdf,.txt,image/png,image/jpeg,image/webp,image/gif,audio/*";
 const surfaceClass = "rounded-3xl border border-slate-200 bg-white shadow-sm";
@@ -450,7 +450,7 @@ function PatientProfile() {
   }, []);
 
   const getFileUrl = (fileUrl) => {
-    return fileUrl ? new URL(fileUrl, SERVER_BASE_URL).toString() : "";
+    return fileUrl ? resolveServerUrl(fileUrl) : "";
   };
 
   const isImageAttachment = (message) => {

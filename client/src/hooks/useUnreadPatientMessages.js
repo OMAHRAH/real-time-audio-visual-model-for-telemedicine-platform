@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { io } from "socket.io-client";
 import API from "../api/api";
 import { getCurrentUser } from "../auth";
+import { SOCKET_URL } from "../config/runtime";
 
 const getEntityId = (value) => {
   if (!value) return "";
@@ -59,7 +60,7 @@ export default function useUnreadPatientMessages() {
       return undefined;
     }
 
-    const socket = io("http://localhost:5000");
+    const socket = io(SOCKET_URL);
     const handleIncomingMessage = (message) => {
       if (getEntityId(message.receiver) === currentUserId) {
         refreshUnreadSummary();
