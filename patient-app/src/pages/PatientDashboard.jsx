@@ -433,12 +433,14 @@ export default function PatientDashboard() {
                 to="/vitals"
                 title="Submit vitals"
                 subtitle="Send blood pressure and glucose readings."
+                tone="primary"
                 icon={<HeartPulseIcon />}
               />
               <QuickActionLink
                 to="/chat"
                 title="Open chat"
                 subtitle="Reply to doctors and continue consultations."
+                tone="primary"
                 icon={<ChatBubbleIcon />}
                 badge={
                   totalUnreadConversations > 0
@@ -594,30 +596,30 @@ export default function PatientDashboard() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-orange-50 shadow-sm">
-          <div className="border-b border-rose-100 px-5 py-5 sm:px-6">
-            <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
+        <div className="emergency-panel overflow-hidden rounded-[2rem] border border-rose-200 bg-gradient-to-br from-rose-100 via-rose-50 to-orange-100 shadow-sm">
+          <div className="emergency-panel-header border-b border-rose-100 px-5 py-5 sm:px-6">
+            <span className="emergency-panel-badge inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">
               Emergency Support
             </span>
-            <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+            <h3 className="emergency-panel-title mt-4 text-2xl font-semibold tracking-tight text-slate-950">
               Escalate urgent symptoms immediately
             </h3>
-            <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+            <p className="emergency-panel-copy mt-3 text-sm leading-6 text-slate-600 sm:text-base">
               Use this only when you need rapid intervention from the care team.
             </p>
           </div>
 
           <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
-            <div className="rounded-3xl border border-rose-100 bg-white/80 p-4 backdrop-blur sm:p-5">
+            <div className="emergency-panel-note rounded-3xl border border-rose-100 bg-white/80 p-4 backdrop-blur sm:p-5">
               <div className="flex items-start gap-3">
-                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+                <span className="emergency-panel-icon inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
                   <LightningIcon />
                 </span>
                 <div>
-                  <p className="font-medium text-slate-900">
+                  <p className="emergency-panel-note-title font-medium text-slate-900">
                     Priority routing
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                  <p className="emergency-panel-note-copy mt-1 text-sm leading-6 text-slate-600">
                     If you already have an assigned doctor, the alert follows
                     that care relationship. Otherwise admin will route it to the
                     fastest responder.
@@ -639,7 +641,7 @@ export default function PatientDashboard() {
             </button>
 
             {emergencyState.message && (
-              <div className="rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+              <div className="emergency-panel-feedback rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
                 {emergencyState.message}
               </div>
             )}
