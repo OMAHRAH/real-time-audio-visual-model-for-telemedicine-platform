@@ -1,4 +1,5 @@
 import Notification from "../models/Notification.js";
+import { processAppointmentReminders } from "../utils/appointmentReminders.js";
 import { markNotificationsRead } from "../utils/notifications.js";
 
 const populateNotification = (query) =>
@@ -11,6 +12,12 @@ const populateNotification = (query) =>
 
 export const getNotifications = async (req, res) => {
   try {
+    await processAppointmentReminders({
+      io: req.io,
+      userId: req.user.id,
+      role: req.user.role,
+    });
+
     const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
     const unreadOnly = req.query.unread === "true";
     const query = {
@@ -47,6 +54,12 @@ export const getNotifications = async (req, res) => {
 
 export const getNotificationSummary = async (req, res) => {
   try {
+    await processAppointmentReminders({
+      io: req.io,
+      userId: req.user.id,
+      role: req.user.role,
+    });
+
     const unreadCount = await Notification.countDocuments({
       recipient: req.user.id,
       readAt: null,

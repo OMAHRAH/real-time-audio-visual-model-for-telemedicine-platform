@@ -1,4 +1,49 @@
+const formatAppointmentDateTime = (appointment) => {
+  const parsed = new Date(appointment.appointmentDate);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Schedule pending";
+  }
+
+  return parsed.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: appointment.appointmentTimezone || "Africa/Lagos",
+  });
+};
+
+const getReminderMeta = (appointment) => {
+  const appointmentTime = new Date(appointment.appointmentDate).getTime();
+  const now = Date.now();
+
+  if (!Number.isFinite(appointmentTime) || appointmentTime <= now) {
+    return null;
+  }
+
+  const msUntil = appointmentTime - now;
+
+  if (msUntil <= 60 * 60 * 1000) {
+    return {
+      label: "Starts within 1 hour",
+      className: "bg-red-50 text-red-700",
+    };
+  }
+
+  if (msUntil <= 24 * 60 * 60 * 1000) {
+    return {
+      label: "Starts within 24 hours",
+      className: "bg-amber-50 text-amber-700",
+    };
+  }
+
+  return null;
+};
+
 export default function AppointmentCard({ appointment }) {
+  const reminderMeta = getReminderMeta(appointment);
   const doctorLabel = appointment.doctor?.name
     ? `Doctor: ${appointment.doctor.name}`
     : appointment.preferredDoctor?.name
@@ -10,7 +55,7 @@ export default function AppointmentCard({ appointment }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-medium text-slate-900">
-            {new Date(appointment.appointmentDate).toLocaleString()}
+            {formatAppointmentDateTime(appointment)}
           </p>
           <p className="mt-1 text-sm text-slate-500">
             {doctorLabel}
@@ -26,6 +71,14 @@ export default function AppointmentCard({ appointment }) {
           {appointment.status}
         </span>
       </div>
+
+      {reminderMeta ? (
+        <span
+          className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-medium ${reminderMeta.className}`}
+        >
+          {reminderMeta.label}
+        </span>
+      ) : null}
 
       {appointment.reason && (
         <p className="mt-3 text-sm leading-6 text-slate-600">

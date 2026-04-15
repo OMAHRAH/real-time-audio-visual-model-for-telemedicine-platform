@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  assignPatientHospitalNumber,
   getAdminDashboard,
   getAdminPatientProfile,
   routePatientToDoctor,
@@ -10,6 +11,12 @@ const router = express.Router();
 
 router.get("/dashboard", protect, authorize("admin"), getAdminDashboard);
 router.get("/patients/:id", protect, authorize("admin"), getAdminPatientProfile);
+router.patch(
+  "/patients/:id/hospital-number",
+  protect,
+  authorize("admin"),
+  assignPatientHospitalNumber,
+);
 router.post("/route-patient", protect, authorize("admin"), routePatientToDoctor);
 
 export default router;

@@ -3,6 +3,7 @@ import Appointment from "../models/appointment.js";
 import VitalReading from "../models/VitalReading.js";
 import CareAssignment from "../models/CareAssignment.js";
 import Alert from "../models/Alert.js";
+import { processAppointmentReminders } from "../utils/appointmentReminders.js";
 
 export const getDoctorDashboard = async (req, res) => {
   try {
@@ -11,6 +12,12 @@ export const getDoctorDashboard = async (req, res) => {
     }
 
     const doctorId = req.user.id;
+
+    await processAppointmentReminders({
+      io: req.io,
+      userId: doctorId,
+      role: req.user.role,
+    });
 
     const [
       activeAssignments,

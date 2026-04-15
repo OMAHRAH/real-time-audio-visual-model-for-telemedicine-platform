@@ -32,6 +32,44 @@ const getAppointmentDoctorLabel = (appointment) =>
   appointment.preferredDoctor?.name ||
   "Awaiting admin routing";
 
+const getAgeLabel = (dateOfBirth) => {
+  if (!dateOfBirth) {
+    return "Not provided";
+  }
+
+  const birthDate = new Date(dateOfBirth);
+  if (Number.isNaN(birthDate.getTime())) {
+    return "Not provided";
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1;
+  }
+
+  return age >= 0 ? `${age} years` : "Not provided";
+};
+
+const getBmiLabel = (heightCm, weightKg) => {
+  if (!heightCm || !weightKg) {
+    return "Not available";
+  }
+
+  const heightMeters = Number(heightCm) / 100;
+  if (!Number.isFinite(heightMeters) || heightMeters <= 0) {
+    return "Not available";
+  }
+
+  const bmi = Number(weightKg) / (heightMeters * heightMeters);
+  return Number.isFinite(bmi) ? bmi.toFixed(1) : "Not available";
+};
+
 function ConsultationRecordFields({
   appointment,
   readOnly,
@@ -322,10 +360,24 @@ function PatientRecordPanel({
 
       <section className={`p-5 sm:p-6 ${sectionClass}`}>
         <h2 className="text-xl font-semibold">Patient Information</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">Name</p>
             <p className="mt-2 font-semibold text-slate-900">{patient?.name}</p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Hospital Number</p>
+            <p className="mt-2 break-all font-semibold text-slate-900">
+              {patient?.hospitalNumber || "Not assigned"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Timezone</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {patient?.timezone || "Africa/Lagos"}
+            </p>
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-4">
@@ -339,6 +391,97 @@ function PatientRecordPanel({
 
       <section className={`p-5 sm:p-6 ${sectionClass}`}>
         <h2 className="text-xl font-semibold">Medical Profile</h2>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Age</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {getAgeLabel(patient?.medicalProfile?.dateOfBirth)}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Gender</p>
+            <p className="mt-2 font-semibold capitalize text-slate-900">
+              {patient?.medicalProfile?.gender?.replaceAll("_", " ") ||
+                "Not provided"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Blood group</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {patient?.medicalProfile?.bloodGroup || "Not provided"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Height</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {patient?.medicalProfile?.heightCm
+                ? `${patient.medicalProfile.heightCm} cm`
+                : "Not provided"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Weight</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {patient?.medicalProfile?.weightKg
+                ? `${patient.medicalProfile.weightKg} kg`
+                : "Not provided"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">BMI</p>
+            <p className="mt-2 font-semibold text-slate-900">
+              {getBmiLabel(
+                patient?.medicalProfile?.heightCm,
+                patient?.medicalProfile?.weightKg,
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+          <p className="text-sm text-slate-500">Emergency contact</p>
+          {patient?.medicalProfile?.emergencyContact?.name ||
+          patient?.medicalProfile?.emergencyContact?.phone ||
+          patient?.medicalProfile?.emergencyContact?.relationship ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Name
+                </p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {patient.medicalProfile.emergencyContact.name || "Not provided"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Phone
+                </p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {patient.medicalProfile.emergencyContact.phone || "Not provided"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Relationship
+                </p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {patient.medicalProfile.emergencyContact.relationship ||
+                    "Not provided"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">
+              No emergency contact has been added yet.
+            </p>
+          )}
+        </div>
+
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {[
             ["Allergies", patient?.medicalProfile?.allergies],

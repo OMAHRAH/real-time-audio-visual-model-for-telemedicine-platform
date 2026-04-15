@@ -13,6 +13,14 @@ export default function MedicalProfile() {
       storedUser?.timezone ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
       "Africa/Lagos",
+    dateOfBirth: "",
+    gender: "",
+    bloodGroup: "",
+    heightCm: "",
+    weightKg: "",
+    emergencyContactName: "",
+    emergencyContactPhone: "",
+    emergencyContactRelationship: "",
     allergies: "",
     medications: "",
     medicalHistory: "",
@@ -33,6 +41,27 @@ export default function MedicalProfile() {
             profile.timezone ||
             Intl.DateTimeFormat().resolvedOptions().timeZone ||
             "Africa/Lagos",
+          dateOfBirth: profile.medicalProfile?.dateOfBirth
+            ? String(profile.medicalProfile.dateOfBirth).slice(0, 10)
+            : "",
+          gender: profile.medicalProfile?.gender || "",
+          bloodGroup: profile.medicalProfile?.bloodGroup || "",
+          heightCm:
+            profile.medicalProfile?.heightCm === null ||
+            profile.medicalProfile?.heightCm === undefined
+              ? ""
+              : String(profile.medicalProfile.heightCm),
+          weightKg:
+            profile.medicalProfile?.weightKg === null ||
+            profile.medicalProfile?.weightKg === undefined
+              ? ""
+              : String(profile.medicalProfile.weightKg),
+          emergencyContactName:
+            profile.medicalProfile?.emergencyContact?.name || "",
+          emergencyContactPhone:
+            profile.medicalProfile?.emergencyContact?.phone || "",
+          emergencyContactRelationship:
+            profile.medicalProfile?.emergencyContact?.relationship || "",
           allergies: toTextareaValue(profile.medicalProfile?.allergies),
           medications: toTextareaValue(profile.medicalProfile?.medications),
           medicalHistory: toTextareaValue(profile.medicalProfile?.medicalHistory),
@@ -56,6 +85,14 @@ export default function MedicalProfile() {
 
   const profileCompleteness = useMemo(() => {
     const fields = [
+      form.dateOfBirth,
+      form.gender,
+      form.bloodGroup,
+      form.heightCm,
+      form.weightKg,
+      form.emergencyContactName,
+      form.emergencyContactPhone,
+      form.emergencyContactRelationship,
       form.allergies,
       form.medications,
       form.medicalHistory,
@@ -65,6 +102,14 @@ export default function MedicalProfile() {
 
     return Math.round((filled / fields.length) * 100);
   }, [
+    form.dateOfBirth,
+    form.gender,
+    form.bloodGroup,
+    form.heightCm,
+    form.weightKg,
+    form.emergencyContactName,
+    form.emergencyContactPhone,
+    form.emergencyContactRelationship,
     form.allergies,
     form.medications,
     form.medicalHistory,
@@ -88,6 +133,16 @@ export default function MedicalProfile() {
         name: form.name,
         timezone: form.timezone,
         medicalProfile: {
+          dateOfBirth: form.dateOfBirth,
+          gender: form.gender,
+          bloodGroup: form.bloodGroup,
+          heightCm: form.heightCm,
+          weightKg: form.weightKg,
+          emergencyContact: {
+            name: form.emergencyContactName,
+            phone: form.emergencyContactPhone,
+            relationship: form.emergencyContactRelationship,
+          },
           allergies: form.allergies,
           medications: form.medications,
           medicalHistory: form.medicalHistory,
@@ -170,6 +225,123 @@ export default function MedicalProfile() {
                   className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Date of birth
+                </label>
+                <input
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(event) =>
+                    updateField("dateOfBirth", event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Gender
+                </label>
+                <select
+                  value={form.gender}
+                  onChange={(event) => updateField("gender", event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="non_binary">Non-binary</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Blood group
+                </label>
+                <input
+                  value={form.bloodGroup}
+                  onChange={(event) =>
+                    updateField("bloodGroup", event.target.value.toUpperCase())
+                  }
+                  placeholder="O+, A-, AB+"
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Height (cm)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.heightCm}
+                  onChange={(event) => updateField("heightCm", event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Weight (kg)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={form.weightKg}
+                  onChange={(event) => updateField("weightKg", event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Emergency contact name
+                </label>
+                <input
+                  value={form.emergencyContactName}
+                  onChange={(event) =>
+                    updateField("emergencyContactName", event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Emergency contact phone
+                </label>
+                <input
+                  value={form.emergencyContactPhone}
+                  onChange={(event) =>
+                    updateField("emergencyContactPhone", event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Emergency contact relationship
+              </label>
+              <input
+                value={form.emergencyContactRelationship}
+                onChange={(event) =>
+                  updateField("emergencyContactRelationship", event.target.value)
+                }
+                placeholder="Parent, spouse, sibling, caregiver"
+                className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              />
             </div>
 
             {[

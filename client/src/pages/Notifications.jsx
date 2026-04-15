@@ -9,6 +9,16 @@ const priorityClasses = {
   normal: "bg-slate-100 text-slate-600",
 };
 
+const getNotificationCardClassName = (notification) =>
+  notification.readAt
+    ? "border-slate-200 bg-white"
+    : "border-blue-100 bg-blue-50";
+
+const getNotificationActionClassName = (notification) =>
+  notification.readAt
+    ? "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+    : "inline-flex items-center justify-center rounded-full border border-blue-100 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-slate-50";
+
 function formatDateTime(value) {
   const parsed = new Date(value);
 
@@ -130,11 +140,9 @@ export default function Notifications() {
             {notifications.map((notification) => (
               <div
                 key={notification._id}
-                className={`rounded-3xl border p-4 sm:p-5 ${
-                  notification.readAt
-                    ? "border-slate-200 bg-white"
-                    : "border-blue-200 bg-blue-50/70"
-                }`}
+                className={`rounded-3xl border p-4 sm:p-5 ${getNotificationCardClassName(
+                  notification,
+                )}`}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -189,7 +197,7 @@ export default function Notifications() {
                       <button
                         type="button"
                         onClick={() => markOneAsRead(notification._id)}
-                        className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        className={getNotificationActionClassName(notification)}
                       >
                         Mark read
                       </button>

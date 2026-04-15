@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/api";
 import { getCurrentUser } from "../auth";
@@ -14,6 +14,7 @@ function Patients() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -38,6 +39,22 @@ function Patients() {
   const getPatientPath = (patientId) =>
     isAdmin ? `/admin/patients/${patientId}` : `/patients/${patientId}`;
 
+  const filteredPatients = useMemo(() => {
+    const searchValue = search.trim().toLowerCase();
+
+    if (!searchValue) {
+      return patients;
+    }
+
+    return patients.filter((patient) =>
+      [patient.name, patient.hospitalNumber, patient.email]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(searchValue),
+    );
+  }, [patients, search]);
+
   return (
     <DoctorShell
       title="Patients"
@@ -48,18 +65,27 @@ function Patients() {
       }
     >
       <div className={`p-5 sm:p-6 ${surfaceClass}`}>
+        <div className="mb-5">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by patient name or hospital number"
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 lg:max-w-md"
+          />
+        </div>
+
         {loading && <p className="text-sm text-slate-500">Loading patients...</p>}
 
         {!loading && error && <p className="text-sm text-red-600">{error}</p>}
 
-        {!loading && !error && patients.length === 0 && (
+        {!loading && !error && filteredPatients.length === 0 && (
           <p className="text-sm text-slate-500">No patients found.</p>
         )}
 
-        {!loading && !error && patients.length > 0 && (
+        {!loading && !error && filteredPatients.length > 0 && (
           <>
             <div className="space-y-3 lg:hidden">
-              {patients.map((patient) => (
+              {filteredPatients.map((patient) => (
                 <Link
                   key={patient._id}
                   to={getPatientPath(patient._id)}
@@ -71,6 +97,9 @@ function Patients() {
                         {patient.name}
                       </p>
                       <p className="truncate text-sm text-slate-500">
+                        {patient.hospitalNumber || "Hospital number not assigned"}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-slate-400">
                         {patient.email}
                       </p>
                     </div>
@@ -109,7 +138,7 @@ function Patients() {
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-sm text-slate-500">
                     <th className="py-3 pr-4 font-medium">Name</th>
-                    <th className="py-3 pr-4 font-medium">Email</th>
+                    <th className="py-3 pr-4 font-medium">Hospital Number</th>
                     <th className="py-3 pr-4 font-medium">
                       {isAdmin ? "Assigned Doctor" : "Unread Chat"}
                     </th>
@@ -121,13 +150,20 @@ function Patients() {
                 </thead>
 
                 <tbody>
-                  {patients.map((patient) => (
+                  {filteredPatients.map((patient) => (
                     <tr key={patient._id} className="border-b border-slate-100">
                       <td className="py-4 pr-4 font-medium text-slate-900">
-                        {patient.name}
+                        <div>
+                          <p>{patient.name}</p>
+                          <p className="mt-1 text-xs font-normal text-slate-400">
+                            {patient.email}
+                          </p>
+                        </div>
                       </td>
 
-                      <td className="py-4 pr-4 text-slate-600">{patient.email}</td>
+                      <td className="py-4 pr-4 text-slate-600">
+                        {patient.hospitalNumber || "Not assigned"}
+                      </td>
 
                       <td className="py-4 pr-4">
                         {isAdmin ? (

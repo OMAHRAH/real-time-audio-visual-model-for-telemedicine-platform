@@ -16,6 +16,15 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
     },
 
+    hospitalNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true,
+      default: null,
+    },
+
     password: {
       type: String,
       required: true,
@@ -52,6 +61,47 @@ const userSchema = new mongoose.Schema(
     },
 
     medicalProfile: {
+      dateOfBirth: {
+        type: Date,
+        default: null,
+      },
+      gender: {
+        type: String,
+        enum: ["", "female", "male", "non_binary", "prefer_not_to_say"],
+        default: "",
+      },
+      bloodGroup: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      heightCm: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      weightKg: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      emergencyContact: {
+        name: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        phone: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        relationship: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+      },
       allergies: {
         type: [String],
         default: [],

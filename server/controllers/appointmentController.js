@@ -3,6 +3,7 @@ import DoctorAvailabilitySlot from "../models/DoctorAvailabilitySlot.js";
 import User from "../models/user.js";
 import CareAssignment from "../models/CareAssignment.js";
 import { getActiveAssignment, upsertActiveAssignment } from "../utils/careAssignments.js";
+import { processAppointmentReminders } from "../utils/appointmentReminders.js";
 import {
   createNotification,
   createNotifications,
@@ -11,7 +12,7 @@ import {
 
 const getPopulatedAppointment = (appointmentId) =>
   Appointment.findById(appointmentId)
-    .populate("patient", "name email")
+    .populate("patient", "name email hospitalNumber")
     .populate("doctor", "name email specialty isOnline workloadStatus")
     .populate("preferredDoctor", "name email specialty isOnline workloadStatus")
     .populate("slot");
@@ -157,6 +158,12 @@ export const createAppointment = async (req, res) => {
 // Get appointments (role-based)
 export const getAppointments = async (req, res) => {
   try {
+    await processAppointmentReminders({
+      io: req.io,
+      userId: req.user.id,
+      role: req.user.role,
+    });
+
     let query = {};
 
     if (req.user.role === "patient") {
@@ -168,7 +175,7 @@ export const getAppointments = async (req, res) => {
     }
 
     const appointments = await Appointment.find(query)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email specialty isOnline workloadStatus")
       .populate(
         "preferredDoctor",

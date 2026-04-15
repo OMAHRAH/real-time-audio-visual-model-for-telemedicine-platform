@@ -326,9 +326,96 @@ const averageMinutes = (durations) => {
   return Number((total / durations.length).toFixed(1));
 };
 
-const buildChatResponseDurations = (messages) => {
+const ANALYTICS_TREND_DAYS = 7;
+
+const buildTrendBuckets = (days = ANALYTICS_TREND_DAYS) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (days - index - 1));
+
+    return {
+      key: date.toISOString().slice(0, 10),
+      label: date.toLocaleDateString([], { weekday: "short" }),
+      date,
+    };
+  });
+};
+
+const buildAverageTrend = (records) => {
+  const buckets = buildTrendBuckets().map((bucket) => ({
+    ...bucket,
+    total: 0,
+    count: 0,
+  }));
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  records.forEach((record) => {
+    const occurredAt = new Date(record.occurredAt);
+    if (Number.isNaN(occurredAt.getTime()) || !Number.isFinite(record.minutes)) {
+      return;
+    }
+
+    const bucket = bucketMap.get(occurredAt.toISOString().slice(0, 10));
+    if (!bucket) {
+      return;
+    }
+
+    bucket.total += record.minutes;
+    bucket.count += 1;
+  });
+
+  return buckets.map(({ key, label, date, total, count }) => ({
+    key,
+    label,
+    date,
+    count,
+    value: count ? Number((total / count).toFixed(1)) : 0,
+  }));
+};
+
+const buildCallRateTrend = (callLogs) => {
+  const buckets = buildTrendBuckets().map((bucket) => ({
+    ...bucket,
+    totalCalls: 0,
+    missedCalls: 0,
+  }));
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  callLogs.forEach((callLog) => {
+    const createdAt = new Date(callLog.createdAt);
+    if (Number.isNaN(createdAt.getTime())) {
+      return;
+    }
+
+    const bucket = bucketMap.get(createdAt.toISOString().slice(0, 10));
+    if (!bucket) {
+      return;
+    }
+
+    bucket.totalCalls += 1;
+    if (callLog.callDetails?.status === "missed") {
+      bucket.missedCalls += 1;
+    }
+  });
+
+  return buckets.map(({ key, label, date, totalCalls, missedCalls }) => ({
+    key,
+    label,
+    date,
+    totalCalls,
+    missedCalls,
+    value: totalCalls
+      ? Number(((missedCalls / totalCalls) * 100).toFixed(1))
+      : 0,
+  }));
+};
+
+const buildChatResponseRecords = (messages) => {
   const pendingByConversation = new Map();
-  const responseDurations = [];
+  const responseRecords = [];
 
   messages.forEach((message) => {
     const patientId = message.patient?.toString?.() || "";
@@ -352,12 +439,15 @@ const buildChatResponseDurations = (messages) => {
     const waitingSince = pendingByConversation.get(conversationKey);
 
     if (waitingSince) {
-      responseDurations.push((messageTime - waitingSince) / (1000 * 60));
+      responseRecords.push({
+        minutes: (messageTime - waitingSince) / (1000 * 60),
+        occurredAt: message.createdAt,
+      });
       pendingByConversation.delete(conversationKey);
     }
   });
 
-  return responseDurations;
+  return responseRecords;
 };
 
 const buildAnalyticsSnapshot = async () => {
@@ -406,7 +496,7 @@ const buildAnalyticsSnapshot = async () => {
       type: "call_log",
       createdAt: { $gte: since },
     })
-      .select("callDetails")
+      .select("callDetails createdAt")
       .lean(),
     ChatMessage.find({
       type: { $in: ["text", "file", "image", "audio"] },
@@ -417,28 +507,49 @@ const buildAnalyticsSnapshot = async () => {
       .lean(),
   ]);
 
-  const assignmentDurations = [
-    ...routedAppointments.map(
-      (item) => (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
-    ),
-    ...routedVitals.map(
-      (item) => (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
-    ),
-    ...routedAlerts.map(
-      (item) => (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
-    ),
-  ].filter((value) => Number.isFinite(value) && value >= 0);
+  const assignmentRecords = [
+    ...routedAppointments.map((item) => ({
+      minutes:
+        (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
+      occurredAt: item.routedAt,
+    })),
+    ...routedVitals.map((item) => ({
+      minutes:
+        (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
+      occurredAt: item.routedAt,
+    })),
+    ...routedAlerts.map((item) => ({
+      minutes:
+        (new Date(item.routedAt) - new Date(item.createdAt)) / (1000 * 60),
+      occurredAt: item.routedAt,
+    })),
+  ].filter(
+    (record) => Number.isFinite(record.minutes) && record.minutes >= 0,
+  );
 
-  const alertReviewDurations = [
-    ...reviewedVitals.map(
-      (item) => (new Date(item.reviewedAt) - new Date(item.createdAt)) / (1000 * 60),
-    ),
-    ...resolvedAlerts.map(
-      (item) => (new Date(item.resolvedAt) - new Date(item.createdAt)) / (1000 * 60),
-    ),
-  ].filter((value) => Number.isFinite(value) && value >= 0);
+  const alertReviewRecords = [
+    ...reviewedVitals.map((item) => ({
+      minutes:
+        (new Date(item.reviewedAt) - new Date(item.createdAt)) / (1000 * 60),
+      occurredAt: item.reviewedAt,
+    })),
+    ...resolvedAlerts.map((item) => ({
+      minutes:
+        (new Date(item.resolvedAt) - new Date(item.createdAt)) / (1000 * 60),
+      occurredAt: item.resolvedAt,
+    })),
+  ].filter(
+    (record) => Number.isFinite(record.minutes) && record.minutes >= 0,
+  );
 
-  const responseDurations = buildChatResponseDurations(chatMessages);
+  const responseRecords = buildChatResponseRecords(chatMessages).filter(
+    (record) => Number.isFinite(record.minutes) && record.minutes >= 0,
+  );
+  const assignmentDurations = assignmentRecords.map((record) => record.minutes);
+  const alertReviewDurations = alertReviewRecords.map(
+    (record) => record.minutes,
+  );
+  const responseDurations = responseRecords.map((record) => record.minutes);
   const missedCalls = callLogs.filter(
     (log) => log.callDetails?.status === "missed",
   ).length;
@@ -457,7 +568,35 @@ const buildAnalyticsSnapshot = async () => {
     totalAssignmentsMeasured: assignmentDurations.length,
     totalResponsesMeasured: responseDurations.length,
     totalAlertReviewsMeasured: alertReviewDurations.length,
+    trends: {
+      assignmentTime: buildAverageTrend(assignmentRecords),
+      responseTime: buildAverageTrend(responseRecords),
+      alertReviewTime: buildAverageTrend(alertReviewRecords),
+      missedCallRate: buildCallRateTrend(callLogs),
+    },
   };
+};
+
+const normalizeHospitalNumberInput = (value) =>
+  typeof value === "string"
+    ? value.trim().toUpperCase().replace(/\s+/g, "-")
+    : "";
+
+const generateHospitalNumber = async () => {
+  let sequence = (await User.countDocuments({ role: "patient" })) + 1;
+
+  while (sequence < 10000000) {
+    const candidate = `HSP-${String(sequence).padStart(6, "0")}`;
+    const existingPatient = await User.exists({ hospitalNumber: candidate });
+
+    if (!existingPatient) {
+      return candidate;
+    }
+
+    sequence += 1;
+  }
+
+  throw new Error("Unable to generate a unique hospital number");
 };
 
 export const getAdminDashboard = async (req, res) => {
@@ -476,19 +615,19 @@ export const getAdminDashboard = async (req, res) => {
       emergencyAlerts,
     ] = await Promise.all([
       User.find({ role: "patient" })
-        .select("name email createdAt medicalProfile timezone")
+        .select("name email hospitalNumber createdAt medicalProfile timezone")
         .sort({ createdAt: -1 })
         .lean(),
       User.find({ role: "doctor" })
         .select("name email specialty isOnline workloadStatus createdAt")
         .lean(),
       CareAssignment.find({ status: "active" })
-        .populate("patient", "name email")
+        .populate("patient", "name email hospitalNumber")
         .populate("doctor", "name email specialty isOnline")
         .sort({ updatedAt: -1 })
         .lean(),
       Appointment.find({ status: "pending" })
-        .populate("patient", "name email")
+        .populate("patient", "name email hospitalNumber")
         .populate("doctor", "name email specialty isOnline")
         .populate("preferredDoctor", "name email specialty isOnline")
         .sort({ createdAt: 1 })
@@ -497,12 +636,12 @@ export const getAdminDashboard = async (req, res) => {
         flagged: true,
         reviewedByDoctor: false,
       })
-        .populate("patient", "name email")
+        .populate("patient", "name email hospitalNumber")
         .populate("doctor", "name email specialty isOnline")
         .sort({ createdAt: 1 })
         .lean(),
       Alert.find({ status: "active" })
-        .populate("patient", "name email")
+        .populate("patient", "name email hospitalNumber")
         .populate("doctor", "name email specialty isOnline")
         .populate("triageAdmin", "name email role isOnline")
         .sort({ createdAt: 1 })
@@ -703,7 +842,7 @@ export const routePatientToDoctor = async (req, res) => {
     });
 
     const populatedAssignment = await CareAssignment.findById(assignment._id)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email specialty isOnline workloadStatus")
       .populate("assignedBy", "name email role")
       .lean();
@@ -715,6 +854,60 @@ export const routePatientToDoctor = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Error routing patient",
+      error: error.message,
+    });
+  }
+};
+
+export const assignPatientHospitalNumber = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admins only." });
+    }
+
+    const patient = await User.findOne({
+      _id: req.params.id,
+      role: "patient",
+    });
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    const requestedHospitalNumber = normalizeHospitalNumberInput(
+      req.body.hospitalNumber,
+    );
+    const hospitalNumber =
+      requestedHospitalNumber || (await generateHospitalNumber());
+
+    const existingPatient = await User.findOne({
+      _id: { $ne: patient._id },
+      hospitalNumber,
+    })
+      .select("_id")
+      .lean();
+
+    if (existingPatient) {
+      return res.status(400).json({
+        message: "Hospital number already exists. Choose another one.",
+      });
+    }
+
+    patient.hospitalNumber = hospitalNumber;
+    await patient.save();
+
+    res.json({
+      message: "Hospital number assigned",
+      patient: {
+        _id: patient._id,
+        name: patient.name,
+        email: patient.email,
+        hospitalNumber: patient.hospitalNumber,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error assigning hospital number",
       error: error.message,
     });
   }
@@ -743,10 +936,10 @@ export const getAdminPatientProfile = async (req, res) => {
       emergencyAlerts,
     ] = await Promise.all([
       User.findOne({ _id: patientId, role: "patient" })
-        .select("name email createdAt medicalProfile timezone")
+        .select("name email hospitalNumber createdAt medicalProfile timezone")
         .lean(),
       VitalReading.find({ patient: patientId })
-        .populate("patient", "name email")
+        .populate("patient", "name email hospitalNumber")
         .populate("doctor", "name email specialty isOnline")
         .sort({ createdAt: -1 })
         .lean(),

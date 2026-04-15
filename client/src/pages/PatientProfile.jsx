@@ -881,6 +881,9 @@ function PatientProfile() {
                   {patient?.name || "Patient"}
                 </p>
                 <p className="truncate text-sm text-slate-500">
+                  {patient?.hospitalNumber || "Hospital number not assigned"}
+                </p>
+                <p className="mt-1 truncate text-xs text-slate-400">
                   {patient?.email || "Patient details"}
                 </p>
                 <p className="mt-1 text-sm font-medium text-blue-600">

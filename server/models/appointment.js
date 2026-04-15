@@ -44,7 +44,14 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected", "completed"],
+      enum: [
+        "pending",
+        "approved",
+        "scheduled",
+        "confirmed",
+        "rejected",
+        "completed",
+      ],
       default: "pending",
     },
 
@@ -96,6 +103,17 @@ const appointmentSchema = new mongoose.Schema(
     rescheduleReason: {
       type: String,
       default: "",
+    },
+
+    reminders: {
+      dayBeforeSentAt: {
+        type: Date,
+        default: null,
+      },
+      hourBeforeSentAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true },

@@ -52,7 +52,7 @@ export const createVitalReading = async (req, res) => {
     }
 
     const populatedVital = await VitalReading.findById(vital._id)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email");
 
     if (vital.flagged) {
@@ -127,7 +127,7 @@ export const getCriticalAlerts = async (req, res) => {
     }
 
     const alerts = await VitalReading.find(query)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email")
       .sort({ createdAt: -1 })
       .limit(10);
@@ -148,7 +148,7 @@ export const getFlaggedReadings = async (req, res) => {
     const readings = await VitalReading.find({
       doctor: req.user.id,
       flagged: true,
-    }).populate("patient", "name email");
+    }).populate("patient", "name email hospitalNumber");
 
     res.json({
       count: readings.length,
@@ -224,7 +224,7 @@ export const submitVital = async (req, res) => {
     }
 
     const populatedReading = await VitalReading.findById(reading._id)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email");
 
     const io = req.app.get("io");
@@ -333,7 +333,7 @@ export const getVitalHistory = async (req, res) => {
     }
 
     const readings = await VitalReading.find(query)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .sort({ createdAt: -1 });
 
     res.json({
@@ -353,7 +353,7 @@ export const getLatestVitals = async (req, res) => {
     }
 
     const vitals = await VitalReading.find(query)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .sort({ createdAt: -1 })
       .limit(10);
 
@@ -410,7 +410,7 @@ export const getVitalsByPatient = async (req, res) => {
     }
 
     const vitals = await VitalReading.find({ patient: id })
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .sort({ createdAt: -1 });
 
     res.json({ vitals });

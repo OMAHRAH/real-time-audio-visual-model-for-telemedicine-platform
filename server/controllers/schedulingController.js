@@ -165,7 +165,7 @@ export const cancelAvailabilitySlot = async (req, res) => {
 export const rescheduleAppointment = async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email specialty timezone");
 
     if (!appointment) {
@@ -239,11 +239,15 @@ export const rescheduleAppointment = async (req, res) => {
 
     appointment.rescheduledAt = new Date();
     appointment.rescheduleReason = rescheduleReason;
+    appointment.reminders = {
+      dayBeforeSentAt: null,
+      hourBeforeSentAt: null,
+    };
 
     await appointment.save();
 
     const populatedAppointment = await Appointment.findById(appointment._id)
-      .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
       .populate("doctor", "name email specialty timezone workloadStatus isOnline")
       .populate("preferredDoctor", "name email specialty timezone workloadStatus isOnline")
       .populate("slot");

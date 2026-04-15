@@ -205,7 +205,9 @@ export default function PatientNavbar() {
 
             <div className="text-right">
               <p className="text-sm font-medium">{user?.name || "Patient"}</p>
-              <p className="text-xs text-blue-100">{user?.email || ""}</p>
+              <p className="text-xs text-blue-100">
+                {user?.hospitalNumber || "Hospital number pending"}
+              </p>
             </div>
 
             <button
@@ -252,7 +254,10 @@ export default function PatientNavbar() {
             <p className="mt-3 text-sm font-medium text-slate-900">
               {user?.name || "Patient"}
             </p>
-            <p className="text-sm text-slate-500">{user?.email || ""}</p>
+            <p className="text-sm text-slate-500">
+              {user?.hospitalNumber || "Hospital number pending"}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">{user?.email || ""}</p>
           </div>
 
           <button

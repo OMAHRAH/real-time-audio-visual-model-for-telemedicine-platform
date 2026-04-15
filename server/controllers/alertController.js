@@ -23,7 +23,7 @@ const findEmergencyTriageAdmin = async () => {
 
 const populateAlertQuery = (query) =>
   query
-    .populate("patient", "name email")
+      .populate("patient", "name email hospitalNumber")
     .populate("doctor", "name email specialty isOnline")
     .populate("triageAdmin", "name email role isOnline")
     .populate("resolvedBy", "name email role");

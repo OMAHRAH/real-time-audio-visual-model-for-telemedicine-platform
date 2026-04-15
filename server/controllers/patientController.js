@@ -28,7 +28,7 @@ export const getPatients = async (req, res) => {
     }
 
     const patients = await User.find(patientFilter)
-      .select("name email createdAt medicalProfile timezone")
+      .select("name email hospitalNumber createdAt medicalProfile timezone")
       .sort({ name: 1 })
       .lean();
 
@@ -112,7 +112,7 @@ export const getPatientById = async (req, res) => {
       _id: req.params.id,
       role: "patient",
     })
-      .select("name email createdAt medicalProfile timezone")
+      .select("name email hospitalNumber createdAt medicalProfile timezone")
       .lean();
 
     if (!patient) {

@@ -253,6 +253,51 @@ const formatDateTime = (value) => {
   });
 };
 
+const formatScheduleSlotWindow = (slot) => {
+  const start = new Date(slot.start);
+  const end = new Date(slot.end);
+  const timeZone = slot.timezone || "Africa/Lagos";
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return {
+      primary: "Schedule pending",
+      secondary: timeZone,
+    };
+  }
+
+  return {
+    primary: start.toLocaleString([], {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    }),
+    secondary: `Ends ${end.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    })} | ${timeZone}`,
+  };
+};
+
+const buildScheduleDayLabel = (slot) => {
+  const start = new Date(slot.start);
+  const timeZone = slot.timezone || "Africa/Lagos";
+
+  if (Number.isNaN(start.getTime())) {
+    return "Schedule pending";
+  }
+
+  return start.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone,
+  });
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
@@ -609,6 +654,20 @@ function Dashboard() {
         .slice(0, 5),
     [patients, unreadCountsByPatient],
   );
+  const groupedScheduleSlots = useMemo(
+    () =>
+      scheduleSlots.reduce((groups, slot) => {
+        const dayLabel = buildScheduleDayLabel(slot);
+
+        if (!groups[dayLabel]) {
+          groups[dayLabel] = [];
+        }
+
+        groups[dayLabel].push(slot);
+        return groups;
+      }, {}),
+    [scheduleSlots],
+  );
 
   const unresolvedPatientCount = useMemo(
     () =>
@@ -802,6 +861,9 @@ function Dashboard() {
                           {getAlertSummary(alert)}
                         </p>
                         <p className="mt-2 truncate text-sm text-slate-500">
+                          {alert.patient?.hospitalNumber || "Hospital number not assigned"}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-slate-400">
                           {alert.patient?.email}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
@@ -920,6 +982,9 @@ function Dashboard() {
                         )}
                       </div>
                       <p className="mt-1 truncate text-sm text-slate-500">
+                        {patient.hospitalNumber || "Hospital number not assigned"}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-slate-400">
                         {patient.email}
                       </p>
                       <p className="mt-2 text-xs text-slate-400">
@@ -1205,7 +1270,7 @@ function Dashboard() {
               </button>
             </form>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {scheduleSlots.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
                   <p className="text-base font-medium text-slate-700">
@@ -1217,40 +1282,54 @@ function Dashboard() {
                   </p>
                 </div>
               ) : (
-                scheduleSlots.slice(0, 8).map((slot) => (
-                  <div
-                    key={slot._id}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {new Date(slot.start).toLocaleString()}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Ends {new Date(slot.end).toLocaleTimeString()} | {slot.timezone}
-                        </p>
-                        <p className="mt-2 text-xs text-slate-400">
-                          {slot.status === "booked"
-                            ? "Booked by a patient"
-                            : "Available for booking"}
-                        </p>
-                      </div>
-
-                      {slot.status === "available" ? (
-                        <button
-                          type="button"
-                          onClick={() => cancelAvailabilitySlot(slot._id)}
-                          className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                        >
-                          Remove
-                        </button>
-                      ) : (
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                          Booked
-                        </span>
-                      )}
+                Object.entries(groupedScheduleSlots).map(([dayLabel, daySlots]) => (
+                  <div key={dayLabel} className="space-y-3">
+                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
+                      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        {dayLabel}
+                      </p>
                     </div>
+
+                    {daySlots.slice(0, 8).map((slot) => {
+                      const slotWindow = formatScheduleSlotWindow(slot);
+
+                      return (
+                        <div
+                          key={slot._id}
+                          className="rounded-2xl border border-slate-200 p-4"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-900">
+                                {slotWindow.primary}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-500">
+                                {slotWindow.secondary}
+                              </p>
+                              <p className="mt-2 text-xs text-slate-400">
+                                {slot.status === "booked"
+                                  ? "Booked by a patient"
+                                  : "Available for booking"}
+                              </p>
+                            </div>
+
+                            {slot.status === "available" ? (
+                              <button
+                                type="button"
+                                onClick={() => cancelAvailabilitySlot(slot._id)}
+                                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                              >
+                                Remove
+                              </button>
+                            ) : (
+                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                                Booked
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))
               )}

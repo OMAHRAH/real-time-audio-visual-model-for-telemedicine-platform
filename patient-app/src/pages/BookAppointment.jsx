@@ -14,6 +14,35 @@ const getDoctorStatusBadgeClassName = (doctor) => {
   return "bg-slate-100 text-slate-500";
 };
 
+const formatSlotWindow = (slot) => {
+  const start = new Date(slot.start);
+  const end = new Date(slot.end);
+  const timeZone = slot.timezone || "Africa/Lagos";
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return {
+      primary: "Schedule pending",
+      secondary: timeZone,
+    };
+  }
+
+  return {
+    primary: start.toLocaleString([], {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    }),
+    secondary: `Ends ${end.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    })} | ${timeZone}`,
+  };
+};
+
 export default function BookAppointment() {
   const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState([]);
@@ -247,7 +276,10 @@ export default function BookAppointment() {
               </>
             ) : (
               <div className="space-y-2">
-                {availableSlots.slice(0, 8).map((slot) => (
+                {availableSlots.slice(0, 8).map((slot) => {
+                  const slotWindow = formatSlotWindow(slot);
+
+                  return (
                   <button
                     key={slot._id}
                     type="button"
@@ -262,13 +294,14 @@ export default function BookAppointment() {
                     }`}
                   >
                     <p className="font-medium text-slate-900">
-                      {new Date(slot.start).toLocaleString()}
+                      {slotWindow.primary}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Ends {new Date(slot.end).toLocaleTimeString()} | {slot.timezone}
+                      {slotWindow.secondary}
                     </p>
                   </button>
-                ))}
+                  );
+                })}
                 <button
                   type="button"
                   onClick={() => setSelectedSlotId("")}

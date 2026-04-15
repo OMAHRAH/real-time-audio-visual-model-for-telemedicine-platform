@@ -32,6 +32,66 @@ function SectionCard({ title, subtitle, children }) {
   );
 }
 
+function TrendCard({
+  title,
+  subtitle,
+  items,
+  tone = "blue",
+  valueFormatter = (value) => String(value),
+  footerFormatter = null,
+}) {
+  const toneMap = {
+    blue: "bg-blue-600",
+    amber: "bg-amber-500",
+    red: "bg-red-500",
+    emerald: "bg-emerald-600",
+  };
+  const barClassName = toneMap[tone] || toneMap.blue;
+  const maxValue = Math.max(...items.map((item) => item.value || 0), 1);
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{subtitle}</p>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          No trend data yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.key} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {item.label}
+              </span>
+              <div className="h-2 rounded-full bg-slate-100">
+                <div
+                  className={`h-2 rounded-full ${barClassName}`}
+                  style={{
+                    width: `${Math.max(10, (Number(item.value || 0) / maxValue) * 100)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-sm font-medium text-slate-700">
+                {valueFormatter(item.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {footerFormatter ? (
+        <p className="mt-4 text-xs leading-5 text-slate-500">
+          {footerFormatter(items)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function SlaPill({ sla }) {
   if (!sla) {
     return null;
@@ -183,6 +243,12 @@ export default function AdminDashboard() {
       totalAssignmentsMeasured: 0,
       totalResponsesMeasured: 0,
       totalAlertReviewsMeasured: 0,
+      trends: {
+        assignmentTime: [],
+        responseTime: [],
+        alertReviewTime: [],
+        missedCallRate: [],
+      },
     },
     slaSummary: {
       intakeTotal: 0,
@@ -505,6 +571,9 @@ export default function AdminDashboard() {
                         {item.summary}
                       </p>
                       <p className="mt-2 truncate text-sm text-slate-500">
+                        {item.patient?.hospitalNumber || "Hospital number not assigned"}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-slate-400">
                         {item.patient?.email}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
@@ -602,6 +671,49 @@ export default function AdminDashboard() {
             title="Missed-call rate"
             value={`${dashboard.analytics.missedCallRate}%`}
             subtitle={`${dashboard.analytics.missedCalls} missed across ${dashboard.analytics.totalCalls} calls`}
+          />
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-2">
+          <TrendCard
+            title="Assignment trend"
+            subtitle="Average time to route care items over the last seven days."
+            items={dashboard.analytics.trends?.assignmentTime || []}
+            tone="blue"
+            valueFormatter={(value) => `${value}m`}
+            footerFormatter={(items) =>
+              `${items.reduce((sum, item) => sum + (item.count || 0), 0)} routed items included in this weekly view.`
+            }
+          />
+          <TrendCard
+            title="Response trend"
+            subtitle="Average time to answer patient messages once a staff reply lands."
+            items={dashboard.analytics.trends?.responseTime || []}
+            tone="amber"
+            valueFormatter={(value) => `${value}m`}
+            footerFormatter={(items) =>
+              `${items.reduce((sum, item) => sum + (item.count || 0), 0)} measured staff replies in the same seven-day window.`
+            }
+          />
+          <TrendCard
+            title="Alert review trend"
+            subtitle="Average time to review critical vitals and close emergencies."
+            items={dashboard.analytics.trends?.alertReviewTime || []}
+            tone="red"
+            valueFormatter={(value) => `${value}m`}
+            footerFormatter={(items) =>
+              `${items.reduce((sum, item) => sum + (item.count || 0), 0)} alert reviews measured across vitals and emergency resolution.`
+            }
+          />
+          <TrendCard
+            title="Missed-call trend"
+            subtitle="Daily missed-call rate so operations can spot unstable call windows."
+            items={dashboard.analytics.trends?.missedCallRate || []}
+            tone="emerald"
+            valueFormatter={(value) => `${value}%`}
+            footerFormatter={(items) =>
+              `${items.reduce((sum, item) => sum + (item.totalCalls || 0), 0)} calls in the weekly trend set.`
+            }
           />
         </section>
 
@@ -723,6 +835,9 @@ export default function AdminDashboard() {
                           {item.summary}
                         </p>
                         <p className="mt-2 truncate text-sm text-slate-500">
+                          {item.patient?.hospitalNumber || "Hospital number not assigned"}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-slate-400">
                           {item.patient?.email}
                         </p>
                         <p className="mt-2 text-xs text-slate-400">

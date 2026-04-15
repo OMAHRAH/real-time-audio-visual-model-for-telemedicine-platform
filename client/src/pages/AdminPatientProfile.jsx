@@ -80,12 +80,15 @@ export default function AdminPatientProfile() {
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [routing, setRouting] = useState(false);
   const [resolvingEmergency, setResolvingEmergency] = useState(false);
+  const [hospitalNumberInput, setHospitalNumberInput] = useState("");
+  const [assigningHospitalNumber, setAssigningHospitalNumber] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
       const res = await API.get(`/admin/patients/${id}`);
       setProfile(res.data);
       setSelectedDoctorId(res.data.activeAssignment?.doctor?._id || "");
+      setHospitalNumberInput(res.data.patient?.hospitalNumber || "");
       setFeedback("");
     } catch (error) {
       console.error("Failed to load admin patient profile", error);
@@ -181,6 +184,35 @@ export default function AdminPatientProfile() {
     }
   };
 
+  const assignHospitalNumber = async (shouldGenerate = false) => {
+    setAssigningHospitalNumber(true);
+
+    try {
+      const res = await API.patch(`/admin/patients/${id}/hospital-number`, {
+        hospitalNumber: shouldGenerate ? "" : hospitalNumberInput,
+      });
+
+      const nextHospitalNumber = res.data.patient?.hospitalNumber || "";
+      setHospitalNumberInput(nextHospitalNumber);
+      setProfile((prev) => ({
+        ...prev,
+        patient: {
+          ...prev.patient,
+          hospitalNumber: nextHospitalNumber,
+        },
+      }));
+      setFeedback("Hospital number updated.");
+    } catch (error) {
+      console.error("Failed to assign hospital number", error);
+      setFeedback(
+        error.response?.data?.message ||
+          "Unable to update hospital number right now.",
+      );
+    } finally {
+      setAssigningHospitalNumber(false);
+    }
+  };
+
   return (
     <DoctorShell
       title={profile.patient?.name || "Patient Profile"}
@@ -220,6 +252,9 @@ export default function AdminPatientProfile() {
                       {profile.patient?.name}
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
+                      {profile.patient?.hospitalNumber || "Hospital number not assigned"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
                       {profile.patient?.email}
                     </p>
                   </div>
@@ -272,6 +307,50 @@ export default function AdminPatientProfile() {
                   updates the patient’s active appointments, unresolved vitals,
                   and active alerts.
                 </p>
+
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Hospital number</p>
+                  <p className="mt-2 font-semibold text-slate-900">
+                    {profile.patient?.hospitalNumber || "Not assigned"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    This becomes the patient-facing record identifier for staff workflows.
+                  </p>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-700">
+                    Assign hospital number
+                  </p>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={hospitalNumberInput}
+                      onChange={(event) =>
+                        setHospitalNumberInput(
+                          event.target.value.toUpperCase().replace(/\s+/g, "-"),
+                        )
+                      }
+                      placeholder="HSP-000123"
+                      className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => assignHospitalNumber(false)}
+                      disabled={assigningHospitalNumber}
+                      className="rounded-full bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    >
+                      {assigningHospitalNumber ? "Saving..." : "Save number"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => assignHospitalNumber(true)}
+                      disabled={assigningHospitalNumber}
+                      className="rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
 
                 <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm text-slate-500">Current doctor</p>
