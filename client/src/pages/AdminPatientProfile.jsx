@@ -79,6 +79,7 @@ export default function AdminPatientProfile() {
   const [expandedAppointment, setExpandedAppointment] = useState(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [routing, setRouting] = useState(false);
+  const [resolvingEmergency, setResolvingEmergency] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -105,6 +106,13 @@ export default function AdminPatientProfile() {
   const activeAlerts = useMemo(
     () => profile.alerts.filter((alert) => alert.status === "active"),
     [profile.alerts],
+  );
+  const activeTriageEmergency = useMemo(
+    () =>
+      activeAlerts.find(
+        (alert) => alert.type === "emergency" && !(alert.doctor?._id || alert.doctor),
+      ) || null,
+    [activeAlerts],
   );
   const timeline = useMemo(
     () =>
@@ -138,6 +146,38 @@ export default function AdminPatientProfile() {
       );
     } finally {
       setRouting(false);
+    }
+  };
+
+  const resolveEmergency = async () => {
+    if (!activeTriageEmergency?._id) {
+      return;
+    }
+
+    const shouldResolve = window.confirm(
+      "Close this emergency case without routing it to a doctor?",
+    );
+
+    if (!shouldResolve) {
+      return;
+    }
+
+    setResolvingEmergency(true);
+
+    try {
+      await API.patch(`/alerts/${activeTriageEmergency._id}/resolve`, {
+        resolutionNote: "Resolved by admin after triage assessment.",
+      });
+      setFeedback("Emergency case closed.");
+      await fetchProfile();
+    } catch (error) {
+      console.error("Failed to resolve emergency case", error);
+      setFeedback(
+        error.response?.data?.message ||
+          "Unable to close the emergency case right now.",
+      );
+    } finally {
+      setResolvingEmergency(false);
     }
   };
 
@@ -256,6 +296,25 @@ export default function AdminPatientProfile() {
                     }
                   />
                 </div>
+
+                {activeTriageEmergency && (
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link
+                      to={`/patients/${id}?chat=1`}
+                      className="inline-flex items-center rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                    >
+                      Open live triage chat
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={resolveEmergency}
+                      disabled={resolvingEmergency}
+                      className="inline-flex items-center rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {resolvingEmergency ? "Closing..." : "Close emergency"}
+                    </button>
+                  </div>
+                )}
 
                 {activeAlerts.length > 0 && (
                   <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4">

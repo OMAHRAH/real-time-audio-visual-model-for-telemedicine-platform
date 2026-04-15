@@ -2,6 +2,11 @@ import VitalReading from "../models/VitalReading.js";
 import Appointment from "../models/appointment.js";
 import CareAssignment from "../models/CareAssignment.js";
 import { getActiveAssignment, upsertActiveAssignment } from "../utils/careAssignments.js";
+import {
+  createNotification,
+  createNotifications,
+  getAdminRecipientIds,
+} from "../utils/notifications.js";
 
 export const createVitalReading = async (req, res) => {
   try {
@@ -33,6 +38,7 @@ export const createVitalReading = async (req, res) => {
       doctor: routedDoctorId,
       patient: req.user.id,
       flagged,
+      routedAt: routedDoctorId ? new Date() : null,
     });
 
     if (routedDoctorId) {
@@ -56,6 +62,42 @@ export const createVitalReading = async (req, res) => {
         message: "New critical patient vital detected",
         vital: populatedVital,
       });
+
+      if (routedDoctorId) {
+        await createNotification({
+          io: req.io,
+          recipientId: routedDoctorId,
+          actorId: req.user.id,
+          type: "critical_vital_alert",
+          category: "vital",
+          title: "Critical vital submitted",
+          message: "A patient submitted a flagged vital reading.",
+          link: `/patients/${req.user.id}?chat=1`,
+          priority: "critical",
+          metadata: {
+            vitalId: vital._id.toString(),
+            patientId: req.user.id.toString(),
+          },
+        });
+      } else {
+        const adminRecipientIds = await getAdminRecipientIds();
+        await createNotifications({
+          io: req.io,
+          recipientIds: adminRecipientIds,
+          actorId: req.user.id,
+          type: "critical_vital_intake",
+          category: "vital",
+          title: "Critical vital awaiting routing",
+          message:
+            "A patient submitted a flagged vital reading that needs admin routing.",
+          link: `/admin/patients/${req.user.id}`,
+          priority: "critical",
+          metadata: {
+            vitalId: vital._id.toString(),
+            patientId: req.user.id.toString(),
+          },
+        });
+      }
     }
 
     res.status(201).json({
@@ -168,6 +210,7 @@ export const submitVital = async (req, res) => {
       diastolic,
       glucoseLevel,
       flagged,
+      routedAt: routedDoctorId ? new Date() : null,
     });
 
     if (routedDoctorId) {
@@ -191,6 +234,42 @@ export const submitVital = async (req, res) => {
         message: "New critical patient vital detected",
         vital: populatedReading,
       });
+
+      if (routedDoctorId) {
+        await createNotification({
+          io: req.io,
+          recipientId: routedDoctorId,
+          actorId: req.user.id,
+          type: "critical_vital_alert",
+          category: "vital",
+          title: "Critical vital submitted",
+          message: "A patient submitted a flagged vital reading.",
+          link: `/patients/${req.user.id}?chat=1`,
+          priority: "critical",
+          metadata: {
+            vitalId: reading._id.toString(),
+            patientId: req.user.id.toString(),
+          },
+        });
+      } else {
+        const adminRecipientIds = await getAdminRecipientIds();
+        await createNotifications({
+          io: req.io,
+          recipientIds: adminRecipientIds,
+          actorId: req.user.id,
+          type: "critical_vital_intake",
+          category: "vital",
+          title: "Critical vital awaiting routing",
+          message:
+            "A patient submitted a flagged vital reading that needs admin routing.",
+          link: `/admin/patients/${req.user.id}`,
+          priority: "critical",
+          metadata: {
+            vitalId: reading._id.toString(),
+            patientId: req.user.id.toString(),
+          },
+        });
+      }
     }
 
     res.status(201).json({
@@ -223,6 +302,7 @@ export const markAsReviewed = async (req, res) => {
     }
 
     reading.reviewedByDoctor = true;
+    reading.reviewedAt = new Date();
     await reading.save();
 
     res.json({
@@ -294,6 +374,7 @@ export const reviewVital = async (req, res) => {
     }
 
     vital.reviewedByDoctor = true;
+    vital.reviewedAt = new Date();
     await vital.save();
 
     res.json({

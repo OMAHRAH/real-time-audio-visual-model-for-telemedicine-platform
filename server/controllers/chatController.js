@@ -1,14 +1,70 @@
+import mongoose from "mongoose";
+import Alert from "../models/Alert.js";
+import Appointment from "../models/appointment.js";
+import CareAssignment from "../models/CareAssignment.js";
 import ChatMessage from "../models/chatMessage.js";
 import User from "../models/user.js";
-import mongoose from "mongoose";
+import {
+  createNotification,
+  markNotificationsRead,
+} from "../utils/notifications.js";
 
 const getUnreadFilter = () => ({
   $or: [{ readAt: null }, { readAt: { $exists: false } }],
 });
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(value);
+const buildConversationRoomId = (patientId, careUserId) =>
+  patientId && careUserId ? `conversation:${patientId}:${careUserId}` : "";
 
-// Send message
+const getActiveEmergencyForPatient = (patientId) =>
+  Alert.findOne({
+    patient: patientId,
+    type: "emergency",
+    status: "active",
+  }).sort({ createdAt: -1 });
+
+const canDoctorAccessPatient = async (doctorId, patientId) => {
+  const [activeAssignment, hasHistoricalRelationship] = await Promise.all([
+    CareAssignment.findOne({
+      doctor: doctorId,
+      patient: patientId,
+      status: "active",
+    }).lean(),
+    Appointment.exists({
+      doctor: doctorId,
+      patient: patientId,
+    }),
+  ]);
+
+  return Boolean(activeAssignment || hasHistoricalRelationship);
+};
+
+const canPatientMessageAdmin = async ({ patientId, adminId }) => {
+  const activeEmergency = await getActiveEmergencyForPatient(patientId).lean();
+
+  return Boolean(
+    activeEmergency &&
+      !activeEmergency.doctor &&
+      activeEmergency.triageAdmin &&
+      activeEmergency.triageAdmin.toString() === adminId.toString(),
+  );
+};
+
+const canAdminMessagePatient = async ({ adminId, patientId }) => {
+  const activeEmergency = await getActiveEmergencyForPatient(patientId).lean();
+
+  return Boolean(
+    activeEmergency &&
+      !activeEmergency.doctor &&
+      activeEmergency.triageAdmin &&
+      activeEmergency.triageAdmin.toString() === adminId.toString(),
+  );
+};
+
+const populateChat = (query) =>
+  query.populate("sender", "name role").populate("receiver", "name role");
+
 export const sendMessage = async (req, res) => {
   try {
     const { patient, receiver, message } = req.body;
@@ -28,18 +84,30 @@ export const sendMessage = async (req, res) => {
       patientId = req.user.id;
       senderId = req.user.id;
 
-      const doctor = await User.findOne({
+      const careContact = await User.findOne({
         _id: receiver,
-        role: "doctor",
-      });
+        role: { $in: ["doctor", "admin"] },
+      }).lean();
 
-      if (!doctor) {
-        return res.status(404).json({ message: "Doctor not found" });
+      if (!careContact) {
+        return res.status(404).json({ message: "Care contact not found" });
       }
 
-      if (doctor.isOnline === false) {
+      if (careContact.role === "doctor" && careContact.isOnline === false) {
         return res.status(403).json({
           message: "Doctor is offline and unavailable for chat",
+        });
+      }
+
+      if (
+        careContact.role === "admin" &&
+        !(await canPatientMessageAdmin({
+          patientId,
+          adminId: careContact._id,
+        }))
+      ) {
+        return res.status(403).json({
+          message: "Admin emergency triage is not active for this patient",
         });
       }
     }
@@ -48,6 +116,28 @@ export const sendMessage = async (req, res) => {
       patientId = patient;
       senderId = req.user.id;
       receiverId = patient;
+
+      if (!(await canDoctorAccessPatient(req.user.id, patientId))) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+    }
+
+    if (req.user?.role === "admin") {
+      patientId = patient;
+      senderId = req.user.id;
+      receiverId = patient;
+
+      if (
+        !(await canAdminMessagePatient({
+          adminId: req.user.id,
+          patientId,
+        }))
+      ) {
+        return res.status(403).json({
+          message:
+            "Admin chat is only available while this patient's emergency case is in triage",
+        });
+      }
     }
 
     const chat = await ChatMessage.create({
@@ -60,7 +150,7 @@ export const sendMessage = async (req, res) => {
           ? "image"
           : req.file.mimetype.startsWith("audio/")
             ? "audio"
-          : "file"
+            : "file"
         : "text",
       fileUrl: hasFile ? `/uploads/${req.file.filename}` : undefined,
       fileName: hasFile ? req.file.originalname : undefined,
@@ -68,13 +158,51 @@ export const sendMessage = async (req, res) => {
       fileSize: hasFile ? req.file.size : undefined,
     });
 
-    const populatedChat = await ChatMessage.findById(chat._id)
-      .populate("sender", "name role")
-      .populate("receiver", "name role");
+    const populatedChat = await populateChat(ChatMessage.findById(chat._id))
+      .lean()
+      .exec();
 
     if (req.io) {
+      const conversationParticipantId =
+        req.user?.role === "patient" ? receiverId : senderId;
+      const conversationRoomId = buildConversationRoomId(
+        patientId,
+        conversationParticipantId,
+      );
+
       req.io.emit("new-message", populatedChat);
+
+      if (conversationRoomId) {
+        req.io.to(conversationRoomId).emit(
+          "conversation:new-message",
+          populatedChat,
+        );
+      }
     }
+
+    await createNotification({
+      io: req.io,
+      recipientId: receiverId,
+      actorId: senderId,
+      type: "chat_message",
+      category: "chat",
+      title: "New chat message",
+      message:
+        trimmedMessage ||
+        (hasFile
+          ? "You received a new attachment in chat."
+          : "New message received."),
+      link:
+        req.user?.role === "patient"
+          ? `/patients/${patientId}?chat=1`
+          : `/chat?doctor=${senderId}`,
+      priority: "normal",
+      metadata: {
+        patientId: patientId?.toString?.() || patientId,
+        conversationUserId: senderId?.toString?.() || senderId,
+        chatMessageId: chat._id.toString(),
+      },
+    });
 
     res.status(201).json({
       message: "Message sent",
@@ -88,24 +216,34 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-// Get conversation for a patient
 export const getConversation = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { doctorId } = req.query;
+    const otherUserId = req.query.otherUserId || req.query.doctorId || "";
     const query = { patient: patientId };
 
-    if (doctorId) {
+    if (req.user.role === "patient") {
+      if (req.user.id !== patientId) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+    }
+
+    if (req.user.role === "doctor") {
+      if (!(await canDoctorAccessPatient(req.user.id, patientId))) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+    }
+
+    if (otherUserId) {
       query.$or = [
-        { sender: patientId, receiver: doctorId },
-        { sender: doctorId, receiver: patientId },
+        { sender: patientId, receiver: otherUserId },
+        { sender: otherUserId, receiver: patientId },
       ];
     }
 
-    const messages = await ChatMessage.find(query)
-      .populate("sender", "name role")
-      .populate("receiver", "name role")
-      .sort({ createdAt: 1 });
+    const messages = await populateChat(
+      ChatMessage.find(query).sort({ createdAt: 1 }),
+    );
 
     res.json(messages);
   } catch (error) {
@@ -151,14 +289,14 @@ export const getUnreadSummary = async (req, res) => {
     const userIds = groupedUnreadMessages.map((item) => item._id).filter(Boolean);
     const users = await User.find({
       _id: { $in: userIds },
-      role: isPatient ? "doctor" : "patient",
+      role: isPatient ? { $in: ["doctor", "admin"] } : "patient",
     })
-      .select(isPatient ? "name email specialty isOnline" : "name email")
+      .select(
+        isPatient ? "name email specialty isOnline role" : "name email",
+      )
       .lean();
 
-    const usersById = new Map(
-      users.map((user) => [user._id.toString(), user]),
-    );
+    const usersById = new Map(users.map((user) => [user._id.toString(), user]));
     const unreadItems = groupedUnreadMessages
       .map((item) => {
         const relatedUser = usersById.get(item._id?.toString());
@@ -223,6 +361,16 @@ export const markConversationAsRead = async (req, res) => {
 
     const updateResult = await ChatMessage.updateMany(query, {
       $set: { readAt },
+    });
+
+    await markNotificationsRead({
+      io: req.io,
+      recipientId: req.user.id,
+      extraQuery: {
+        type: "chat_message",
+        "metadata.patientId": patientId,
+        "metadata.conversationUserId": senderId,
+      },
     });
 
     if (req.io && updateResult.modifiedCount > 0) {

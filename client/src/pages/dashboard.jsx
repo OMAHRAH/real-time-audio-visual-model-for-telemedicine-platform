@@ -5,13 +5,6 @@ import { getCurrentUser, storeCurrentUser } from "../auth";
 import DoctorShell from "../components/DoctorShell";
 import useUnreadPatientMessages from "../hooks/useUnreadPatientMessages";
 import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
 } from "recharts";
 import { io } from "socket.io-client";
 import { SOCKET_URL } from "../config/runtime";
@@ -184,6 +177,68 @@ const getVitalSummary = (vital) => {
   return values.join(" | ") || "Critical vital reading";
 };
 
+const getAlertSummary = (alert) =>
+  alert?.alertCategory === "emergency"
+    ? alert.message || "Emergency assistance requested"
+    : getVitalSummary(alert);
+
+const getAlertLabel = (alert) =>
+  alert?.alertCategory === "emergency" ? "Emergency alert" : "Critical vital";
+
+const doctorStatusOptions = [
+  {
+    value: "available",
+    label: "Available",
+    description: "Visible for new chats, appointments, and urgent handoff.",
+    cardClassName: "border-emerald-100 bg-emerald-50",
+    pillClassName: "bg-emerald-600 text-white",
+    accentTextClassName: "text-emerald-700",
+  },
+  {
+    value: "busy",
+    label: "Busy",
+    description: "Still online, but not the best target for new workload.",
+    cardClassName: "border-amber-100 bg-amber-50",
+    pillClassName: "bg-amber-500 text-white",
+    accentTextClassName: "text-amber-700",
+  },
+  {
+    value: "in_consultation",
+    label: "In consultation",
+    description: "Actively with a patient. Keep visible, but avoid new routing.",
+    cardClassName: "border-blue-100 bg-blue-50",
+    pillClassName: "bg-blue-600 text-white",
+    accentTextClassName: "text-blue-700",
+  },
+  {
+    value: "on_break",
+    label: "On break",
+    description: "Temporarily unavailable for handoff while staying signed in.",
+    cardClassName: "border-violet-100 bg-violet-50",
+    pillClassName: "bg-violet-600 text-white",
+    accentTextClassName: "text-violet-700",
+  },
+  {
+    value: "offline",
+    label: "Offline",
+    description: "Hidden from the live doctor queue and new patient routing.",
+    cardClassName: "border-slate-200 bg-slate-100",
+    pillClassName: "bg-slate-700 text-white",
+    accentTextClassName: "text-slate-700",
+  },
+];
+
+const getDoctorStatusMeta = (status) =>
+  doctorStatusOptions.find((option) => option.value === status) ||
+  doctorStatusOptions[0];
+
+const activeAppointmentStatuses = new Set([
+  "pending",
+  "approved",
+  "scheduled",
+  "confirmed",
+]);
+
 const formatDateTime = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -201,6 +256,7 @@ const formatDateTime = (value) => {
 function Dashboard() {
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
+  const currentUserId = currentUser?.id || currentUser?._id || "";
   const { totalUnreadConversations, unreadCountsByPatient } =
     useUnreadPatientMessages();
   const [stats, setStats] = useState({
@@ -212,12 +268,39 @@ function Dashboard() {
   const [vitals, setVitals] = useState([]);
   const [patients, setPatients] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [scheduleSlots, setScheduleSlots] = useState([]);
+  const [slotStart, setSlotStart] = useState("");
+  const [slotEnd, setSlotEnd] = useState("");
+  const [slotTimezone, setSlotTimezone] = useState(
+    currentUser?.timezone ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone ||
+      "Africa/Lagos",
+  );
+  const [updatingSchedule, setUpdatingSchedule] = useState(false);
   const [showAlertDetails, setShowAlertDetails] = useState(false);
-  const [availability, setAvailability] = useState(
-    currentUser?.isOnline !== false,
+  const [workloadStatus, setWorkloadStatus] = useState(
+    currentUser?.workloadStatus ||
+      (currentUser?.isOnline === false ? "offline" : "available"),
   );
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [resolvingAlertId, setResolvingAlertId] = useState(null);
+
+  const removeAlertFromQueue = (alertId) => {
+    setAlerts((prev) => {
+      const nextAlerts = prev.filter((item) => item._id !== alertId);
+
+      setStats((prevStats) => ({
+        ...prevStats,
+        alerts: nextAlerts.length,
+      }));
+
+      if (nextAlerts.length === 0) {
+        setShowAlertDetails(false);
+      }
+
+      return nextAlerts;
+    });
+  };
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -226,7 +309,8 @@ function Dashboard() {
         setStats({
           patients: res.data.totalPatients,
           appointments: res.data.pendingAppointments,
-          alerts: res.data.flaggedVitals,
+          alerts:
+            (res.data.flaggedVitals || 0) + (res.data.activeEmergencyAlerts || 0),
         });
       } catch (err) {
         console.error(err);
@@ -253,11 +337,35 @@ function Dashboard() {
 
     const fetchAlerts = async () => {
       try {
-        const res = await API.get("/vitals/alerts");
-        setAlerts(res.data || []);
+        const [criticalVitalsRes, emergencyAlertsRes] = await Promise.all([
+          API.get("/vitals/alerts"),
+          API.get("/alerts"),
+        ]);
+        const criticalVitals = (criticalVitalsRes.data || []).map((alert) => ({
+          ...alert,
+          alertCategory: "critical_vital",
+        }));
+        const emergencyAlerts = (emergencyAlertsRes.data || [])
+          .filter(
+            (alert) =>
+              alert.type === "emergency" &&
+              alert.status === "active" &&
+              alert.doctor?._id,
+          )
+          .map((alert) => ({
+            ...alert,
+            alertCategory: "emergency",
+          }));
+        const nextAlerts = [...emergencyAlerts, ...criticalVitals].sort(
+          (left, right) =>
+            new Date(right.createdAt).getTime() -
+            new Date(left.createdAt).getTime(),
+        );
+
+        setAlerts(nextAlerts);
         setStats((prev) => ({
           ...prev,
-          alerts: res.data.length,
+          alerts: nextAlerts.length,
         }));
       } catch (err) {
         console.error(err);
@@ -273,17 +381,30 @@ function Dashboard() {
       }
     };
 
+    const fetchScheduleSlots = async () => {
+      try {
+        const res = await API.get("/scheduling/me/slots");
+        setScheduleSlots(res.data.slots || []);
+      } catch (error) {
+        console.error("Failed to fetch doctor schedule", error);
+      }
+    };
+
     fetchDashboard();
     fetchAppointments();
     fetchVitals();
     fetchAlerts();
     fetchPatients();
+    fetchScheduleSlots();
 
     socket.on("criticalAlert", (data) => {
       if (data.vital) {
         setAlerts((prev) => {
           const nextAlerts = [
-            data.vital,
+            {
+              ...data.vital,
+              alertCategory: "critical_vital",
+            },
             ...prev.filter((alert) => alert._id !== data.vital._id),
           ];
 
@@ -307,21 +428,66 @@ function Dashboard() {
       }
     });
 
+    socket.on("emergency-routed", (payload) => {
+      if (String(payload?.doctorId || "") !== currentUserId) {
+        return;
+      }
+
+      fetchDashboard();
+      fetchAlerts();
+      fetchPatients();
+      fetchScheduleSlots();
+    });
+
+    socket.on("emergency-resolved", () => {
+      fetchDashboard();
+      fetchAlerts();
+    });
+
+    socket.on("appointment:updated", (payload) => {
+      if (String(payload?.doctorId || "") !== currentUserId) {
+        return;
+      }
+
+      if (payload?.appointment?._id) {
+        setAppointments((prev) =>
+          prev.some((appointment) => appointment._id === payload.appointment._id)
+            ? prev.map((appointment) =>
+                appointment._id === payload.appointment._id
+                  ? payload.appointment
+                  : appointment,
+              )
+            : [payload.appointment, ...prev],
+        );
+      }
+
+      fetchDashboard();
+      fetchScheduleSlots();
+    });
+
     return () => {
       socket.off("criticalAlert");
+      socket.off("emergency-routed");
+      socket.off("emergency-resolved");
+      socket.off("appointment:updated");
     };
-  }, []);
+  }, [currentUserId]);
 
-  const toggleAvailability = async () => {
+  const currentStatusMeta = getDoctorStatusMeta(workloadStatus);
+
+  const updateWorkloadStatus = async (nextStatus) => {
+    if (!nextStatus || nextStatus === workloadStatus) {
+      return;
+    }
+
     setUpdatingAvailability(true);
 
     try {
-      const nextAvailability = !availability;
       const res = await API.patch("/doctors/availability", {
-        isOnline: nextAvailability,
+        workloadStatus: nextStatus,
       });
 
-      setAvailability(res.data.doctor.isOnline);
+      setWorkloadStatus(res.data.doctor.workloadStatus);
 
       const doctor = res.data.doctor;
       storeCurrentUser({
@@ -333,6 +499,45 @@ function Dashboard() {
       console.error("Failed to update doctor availability", error);
     } finally {
       setUpdatingAvailability(false);
+    }
+  };
+
+  const createAvailabilitySlot = async (event) => {
+    event.preventDefault();
+    setUpdatingSchedule(true);
+
+    try {
+      const res = await API.post("/scheduling/slots", {
+        start: slotStart,
+        end: slotEnd,
+        timezone: slotTimezone,
+      });
+
+      setScheduleSlots((prev) =>
+        [...prev, res.data.slot].sort(
+          (left, right) =>
+            new Date(left.start).getTime() - new Date(right.start).getTime(),
+        ),
+      );
+      setSlotStart("");
+      setSlotEnd("");
+    } catch (error) {
+      console.error("Failed to create availability slot", error);
+    } finally {
+      setUpdatingSchedule(false);
+    }
+  };
+
+  const cancelAvailabilitySlot = async (slotId) => {
+    setUpdatingSchedule(true);
+
+    try {
+      await API.delete(`/scheduling/slots/${slotId}`);
+      setScheduleSlots((prev) => prev.filter((slot) => slot._id !== slotId));
+    } catch (error) {
+      console.error("Failed to cancel availability slot", error);
+    } finally {
+      setUpdatingSchedule(false);
     }
   };
 
@@ -349,47 +554,37 @@ function Dashboard() {
     setResolvingAlertId(alert._id);
 
     try {
-      await API.patch(`/vitals/review/${alert._id}`);
+      if (alert.alertCategory === "critical_vital") {
+        await API.patch(`/vitals/review/${alert._id}`);
+      } else {
+        await API.patch(`/alerts/${alert._id}/resolve`, {
+          resolutionNote:
+            "Emergency case picked up by the assigned doctor from the urgent queue.",
+        });
+      }
 
-      setAlerts((prev) => {
-        const nextAlerts = prev.filter((item) => item._id !== alert._id);
-        setStats((prevStats) => ({
-          ...prevStats,
-          alerts: nextAlerts.length,
-        }));
-
-        if (nextAlerts.length === 0) {
-          setShowAlertDetails(false);
-        }
-
-        return nextAlerts;
-      });
-
+      removeAlertFromQueue(alert._id);
       navigate(`/patients/${patientId}?chat=1&alert=${alert._id}`);
     } catch (error) {
-      console.error("Failed to resolve critical alert", error);
+      console.error("Failed to open alert", error);
     } finally {
       setResolvingAlertId(null);
     }
   };
 
-  const chartData = vitals.map((vital) => {
-    const systolic =
-      vital.systolic ||
-      (vital.bloodPressure
-        ? parseInt(vital.bloodPressure.split("/")[0], 10)
-        : 0);
-
-    return {
-      name: vital.patient?.name || "Patient",
-      systolic,
-      glucose: vital.glucoseLevel || vital.bloodSugar || 0,
-    };
-  });
+  const queuedAppointments = useMemo(
+    () =>
+      appointments.filter((appointment) =>
+        activeAppointmentStatuses.has(
+          String(appointment.status || "").toLowerCase(),
+        ),
+      ),
+    [appointments],
+  );
 
   const nextAppointment = useMemo(() => {
     const now = Date.now();
-    const activeAppointments = appointments
+    const activeAppointments = queuedAppointments
       .filter((appointment) => {
         const timestamp = new Date(appointment.appointmentDate).getTime();
         return Number.isFinite(timestamp) && timestamp >= now;
@@ -400,8 +595,8 @@ function Dashboard() {
           new Date(right.appointmentDate).getTime(),
       );
 
-    return activeAppointments[0] || appointments[0] || null;
-  }, [appointments]);
+    return activeAppointments[0] || queuedAppointments[0] || null;
+  }, [queuedAppointments]);
 
   const patientsNeedingAttention = useMemo(
     () =>
@@ -421,29 +616,43 @@ function Dashboard() {
     [unreadCountsByPatient],
   );
 
-  const latestCriticalAlert = alerts[0] || null;
+  const emergencyAlerts = useMemo(
+    () => alerts.filter((alert) => alert.alertCategory === "emergency"),
+    [alerts],
+  );
+  const criticalAlerts = useMemo(
+    () => alerts.filter((alert) => alert.alertCategory !== "emergency"),
+    [alerts],
+  );
+  const latestUrgentAlert = emergencyAlerts[0] || criticalAlerts[0] || null;
+  const latestCriticalAlert = criticalAlerts[0] || null;
 
   return (
     <DoctorShell
       title="Doctor Dashboard"
       subtitle="Track urgent alerts, patient conversations and follow-up activity from one place."
       actions={
-        <button
-          type="button"
-          onClick={toggleAvailability}
-          disabled={updatingAvailability}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-            availability
-              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-              : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-          }`}
-        >
-          {updatingAvailability
-            ? "Updating..."
-            : availability
-              ? "Go offline"
-              : "Go online"}
-        </button>
+        <div className="flex items-center gap-3">
+          <label
+            htmlFor="doctor-workload-status"
+            className="text-sm font-medium text-slate-600"
+          >
+            Status
+          </label>
+          <select
+            id="doctor-workload-status"
+            value={workloadStatus}
+            onChange={(event) => updateWorkloadStatus(event.target.value)}
+            disabled={updatingAvailability}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+          >
+            {doctorStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       }
     >
       <div className="space-y-6 lg:space-y-7">
@@ -487,49 +696,141 @@ function Dashboard() {
             </div>
 
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-4 sm:rounded-[1.75rem] sm:p-5">
+              <div
+                className={`rounded-[1.5rem] border p-4 sm:rounded-[1.75rem] sm:p-5 ${currentStatusMeta.cardClassName}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-emerald-700">Availability</p>
+                    <p
+                      className={`text-sm font-medium ${currentStatusMeta.accentTextClassName}`}
+                    >
+                      Workload state
+                    </p>
                     <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-2xl">
-                      {availability ? "Online for live care" : "Offline from queue"}
+                      {currentStatusMeta.label}
                     </p>
                   </div>
                   <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      availability
-                        ? "bg-emerald-600 text-white"
-                        : "bg-slate-700 text-white"
-                    }`}
+                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${currentStatusMeta.pillClassName}`}
                   >
-                    {availability ? "Active" : "Paused"}
+                    {workloadStatus === "available"
+                      ? "Accepting"
+                      : workloadStatus === "offline"
+                        ? "Hidden"
+                        : "Visible"}
                   </span>
                 </div>
                 <p className="mt-2 text-sm leading-5 sm:leading-6 text-slate-600">
-                  {availability
-                    ? "Patients can book, chat, and reach you for urgent review."
-                    : "You are hidden from the online doctor queue until you go back online."}
+                  {currentStatusMeta.description}
                 </p>
               </div>
 
               <div className="rounded-[1.5rem] border border-red-100 bg-red-50 p-4 sm:rounded-[1.75rem] sm:p-5">
                 <p className="text-sm font-medium text-red-700">Immediate priority</p>
                 <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:mt-3 sm:text-2xl">
-                  {latestCriticalAlert
-                    ? latestCriticalAlert.patient?.name || "Unassigned patient"
+                  {latestUrgentAlert
+                    ? latestUrgentAlert.patient?.name || "Unassigned patient"
                     : "No active alert"}
                 </p>
                 <p className="mt-2 text-sm leading-5 sm:leading-6 text-slate-600">
-                  {latestCriticalAlert
-                    ? `${getVitalSummary(latestCriticalAlert)} - ${formatDateTime(
-                        latestCriticalAlert.createdAt,
+                  {latestUrgentAlert
+                    ? `${getAlertLabel(latestUrgentAlert)} - ${getAlertSummary(
+                        latestUrgentAlert,
+                      )} - ${formatDateTime(
+                        latestUrgentAlert.createdAt,
                       )}`
-                    : "Your critical queue is currently clear."}
+                    : "Your urgent queue is currently clear."}
                 </p>
               </div>
             </div>
           </div>
         </section>
+
+        {emergencyAlerts.length > 0 && (
+          <section className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-red-700">
+                  Emergency handoff
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold text-slate-950">
+                  Emergency queue
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  These cases were routed to you by admin and stay pinned here until you open the emergency chat.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Active cases
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-red-700">
+                  {emergencyAlerts.length}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {emergencyAlerts.map((alert) => {
+                const patientId = getPatientId(alert.patient);
+
+                return (
+                  <div
+                    key={alert._id}
+                    className="rounded-2xl border border-red-100 bg-white p-4 sm:p-5"
+                  >
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p className="font-semibold text-slate-900">
+                            {alert.patient?.name || "Unknown patient"}
+                          </p>
+                          <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                            Emergency alert
+                          </span>
+                          {patientId && (
+                            <Link
+                              to={`/patients/${patientId}`}
+                              className="text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                            >
+                              Open profile
+                            </Link>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm text-slate-700">
+                          {getAlertSummary(alert)}
+                        </p>
+                        <p className="mt-2 truncate text-sm text-slate-500">
+                          {alert.patient?.email}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+                          <span>{formatDateTime(alert.createdAt)}</span>
+                          <span>
+                            Routed by admin{alert.routedAt ? ` ${formatDateTime(alert.routedAt)}` : ""}
+                          </span>
+                        </div>
+                      </div>
+
+                      {patientId && (
+                        <button
+                          type="button"
+                          onClick={() => openAlertChat(alert)}
+                          disabled={resolvingAlertId === alert._id}
+                          className="inline-flex items-center justify-center rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                        >
+                          {resolvingAlertId === alert._id
+                            ? "Opening..."
+                            : "Open emergency"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -551,12 +852,12 @@ function Dashboard() {
             icon={<CalendarIcon />}
           />
           <StatCard
-            title="Critical alerts"
-            value={stats.alerts}
+            title="Critical vitals"
+            value={criticalAlerts.length}
             subtitle={
-              stats.alerts > 0
-                ? "Needs urgent clinical review"
-                : "No unresolved critical readings"
+              criticalAlerts.length > 0
+                ? "Flagged vital readings waiting for review"
+                : "No critical vitals waiting"
             }
             tone="rose"
             icon={<AlertIcon />}
@@ -641,7 +942,7 @@ function Dashboard() {
 
           <QueueCard
             title="Critical queue"
-            subtitle="Resolve each flagged submission by opening the patient chat."
+            subtitle="Open flagged vitals from the patient chat. Routed emergencies are surfaced separately above."
             tone="rose"
             action={
               <button
@@ -661,33 +962,32 @@ function Dashboard() {
                   </span>
                   <div>
                     <p className="text-base font-semibold text-slate-900">
-                      {stats.alerts > 0
-                        ? `${stats.alerts} alert${stats.alerts === 1 ? "" : "s"} waiting`
-                        : "No unresolved alerts"}
+                      {criticalAlerts.length > 0
+                        ? `${criticalAlerts.length} critical vital${criticalAlerts.length === 1 ? "" : "s"} waiting`
+                        : "No unresolved critical vitals"}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       {latestCriticalAlert
                         ? `Most recent: ${
                             latestCriticalAlert.patient?.name || "Unknown patient"
-                          } - ${getVitalSummary(latestCriticalAlert)}`
-                        : "When patients submit critical vitals, the queue will show up here."}
+                          } - ${getAlertSummary(latestCriticalAlert)}`
+                        : "Critical vitals will show up here."}
                     </p>
                   </div>
                 </div>
               </div>
-            ) : alerts.length === 0 ? (
+            ) : criticalAlerts.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-red-200 bg-white px-4 py-10 text-center">
                 <p className="text-base font-medium text-slate-700">
-                  No active critical alerts.
+                  No active critical vitals.
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  The queue clears automatically as soon as you open and resolve
-                  the alert.
+                  New flagged vital readings will show up here for review.
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {alerts.map((alert) => {
+                {criticalAlerts.map((alert) => {
                   const patientId = getPatientId(alert.patient);
                   const patientName = alert.patient?.name || "Unknown patient";
 
@@ -704,8 +1004,11 @@ function Dashboard() {
                           <p className="font-semibold text-red-700">
                             {patientName}
                           </p>
+                          <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-red-500">
+                            {getAlertLabel(alert)}
+                          </p>
                           <p className="mt-2 text-sm leading-6 text-slate-700">
-                            {getVitalSummary(alert)}
+                            {getAlertSummary(alert)}
                           </p>
                           <p className="mt-3 text-xs text-slate-500">
                             {formatDateTime(alert.createdAt)}
@@ -727,8 +1030,11 @@ function Dashboard() {
                       <p className="font-semibold text-red-700">
                         {patientName}
                       </p>
+                      <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-red-500">
+                        {getAlertLabel(alert)}
+                      </p>
                       <p className="mt-2 text-sm leading-6 text-slate-700">
-                        {getVitalSummary(alert)}
+                        {getAlertSummary(alert)}
                       </p>
                     </div>
                   );
@@ -743,7 +1049,7 @@ function Dashboard() {
           subtitle="Open any appointment to jump directly into the patient chat with the reason already in context."
           tone="slate"
         >
-          {appointments.length === 0 ? (
+          {queuedAppointments.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
               <p className="text-base font-medium text-slate-700">
                 No appointments scheduled yet.
@@ -756,7 +1062,7 @@ function Dashboard() {
           ) : (
             <>
               <div className="space-y-3 md:hidden">
-                {appointments.map((appointment) => (
+                {queuedAppointments.map((appointment) => (
                   <button
                     key={appointment._id}
                     type="button"
@@ -797,7 +1103,7 @@ function Dashboard() {
                   </thead>
 
                   <tbody>
-                    {appointments.map((appointment) => (
+                    {queuedAppointments.map((appointment) => (
                       <tr
                         key={appointment._id}
                         className="cursor-pointer border-b border-slate-100 transition hover:bg-blue-50"
@@ -838,54 +1144,118 @@ function Dashboard() {
           )}
         </QueueCard>
 
-        <section className="grid gap-6 xl:grid-cols-2">
-          <QueueCard
-            title="Blood pressure trend"
-            subtitle="Latest systolic readings from recent patient submissions."
-            tone="slate"
-          >
-            <div className="h-[280px] sm:h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="systolic"
-                    stroke="#2563eb"
-                    strokeWidth={3}
-                    dot={{ r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500">Scheduling</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-950">
+                Publish availability slots
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Patients use these slots for direct booking and rescheduling.
+              </p>
             </div>
-          </QueueCard>
+          </div>
 
-          <QueueCard
-            title="Glucose trend"
-            subtitle="Glucose changes across the latest monitored patients."
-            tone="slate"
-          >
-            <div className="h-[280px] sm:h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="glucose"
-                    stroke="#dc2626"
-                    strokeWidth={3}
-                    dot={{ r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+          <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+            <form onSubmit={createAvailabilitySlot} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Start time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={slotStart}
+                  onChange={(event) => setSlotStart(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  End time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={slotEnd}
+                  onChange={(event) => setSlotEnd(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Timezone
+                </label>
+                <input
+                  value={slotTimezone}
+                  onChange={(event) => setSlotTimezone(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={updatingSchedule}
+                className="w-full rounded-2xl bg-blue-600 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {updatingSchedule ? "Updating..." : "Add availability slot"}
+              </button>
+            </form>
+
+            <div className="space-y-3">
+              {scheduleSlots.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+                  <p className="text-base font-medium text-slate-700">
+                    No slots published yet.
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Add concrete appointment windows so patients can book and
+                    reschedule without manual back-and-forth.
+                  </p>
+                </div>
+              ) : (
+                scheduleSlots.slice(0, 8).map((slot) => (
+                  <div
+                    key={slot._id}
+                    className="rounded-2xl border border-slate-200 p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {new Date(slot.start).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Ends {new Date(slot.end).toLocaleTimeString()} | {slot.timezone}
+                        </p>
+                        <p className="mt-2 text-xs text-slate-400">
+                          {slot.status === "booked"
+                            ? "Booked by a patient"
+                            : "Available for booking"}
+                        </p>
+                      </div>
+
+                      {slot.status === "available" ? (
+                        <button
+                          type="button"
+                          onClick={() => cancelAvailabilitySlot(slot._id)}
+                          className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                          Booked
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          </QueueCard>
+          </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
@@ -942,12 +1312,18 @@ function Dashboard() {
                   Critical response posture
                 </p>
                 <p className="mt-2 text-lg font-semibold text-slate-950">
-                  {alerts.length > 0 ? "Escalated" : "Stable"}
+                  {emergencyAlerts.length > 0
+                    ? "Emergency handoff"
+                    : criticalAlerts.length > 0
+                      ? "Escalated"
+                      : "Stable"}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  {alerts.length > 0
-                    ? "At least one patient has a flagged vital requiring review."
-                    : "No current flagged submissions in the queue."}
+                  {emergencyAlerts.length > 0
+                    ? "Admin has routed an emergency case to you for immediate pickup."
+                    : criticalAlerts.length > 0
+                      ? "At least one patient has a flagged vital requiring review."
+                      : "No current flagged submissions in the queue."}
                 </p>
               </div>
             </div>

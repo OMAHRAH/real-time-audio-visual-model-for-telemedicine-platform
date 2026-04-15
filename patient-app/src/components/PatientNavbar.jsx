@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { getStoredUser, logout } from "../auth";
+import useNotificationSummary from "../hooks/useNotificationSummary";
 import useUnreadChats from "../hooks/useUnreadChats";
 import useTheme from "../hooks/useTheme";
 
@@ -100,6 +101,17 @@ const navItems = [
     description: "Submit and review readings",
   },
   {
+    to: "/profile",
+    label: "Profile",
+    description: "Medical history and care context",
+  },
+  {
+    to: "/notifications",
+    label: "Notifications",
+    description: "Care updates and reminders",
+    showNotificationBadge: true,
+  },
+  {
     to: "/chat",
     label: "Chat",
     description: "Message and call doctors",
@@ -115,6 +127,7 @@ const desktopLinkClassName = ({ isActive }) =>
 export default function PatientNavbar() {
   const user = getStoredUser();
   const { totalUnreadConversations } = useUnreadChats();
+  const { unreadCount } = useNotificationSummary();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isDark, toggleTheme } = useTheme();
 
@@ -168,6 +181,11 @@ export default function PatientNavbar() {
                   {item.showUnreadBadge && totalUnreadConversations > 0 && (
                     <span className="min-w-6 rounded-full bg-red-500 px-2 py-0.5 text-center text-xs font-semibold text-white">
                       {totalUnreadConversations}
+                    </span>
+                  )}
+                  {item.showNotificationBadge && unreadCount > 0 && (
+                    <span className="min-w-6 rounded-full bg-red-500 px-2 py-0.5 text-center text-xs font-semibold text-white">
+                      {unreadCount}
                     </span>
                   )}
                 </span>
@@ -278,6 +296,11 @@ export default function PatientNavbar() {
                   {item.showUnreadBadge && totalUnreadConversations > 0 && (
                     <span className="min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
                       {totalUnreadConversations}
+                    </span>
+                  )}
+                  {item.showNotificationBadge && unreadCount > 0 && (
+                    <span className="min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
+                      {unreadCount}
                     </span>
                   )}
                 </>

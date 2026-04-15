@@ -1,6 +1,10 @@
 import User from "../models/user.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import {
+  getDoctorWorkloadStatusLabel,
+  isDoctorOnlineFromStatus,
+} from "../utils/doctorStatus.js";
 
 const VALID_ROLES = new Set(["patient", "doctor", "admin"]);
 const STAFF_ROLES = new Set(["doctor", "admin"]);
@@ -63,7 +67,13 @@ export const register = async (req, res) => {
         email: user.email,
         role: user.role,
         specialty: user.specialty || "",
-        isOnline: user.isOnline !== false,
+        timezone: user.timezone || "Africa/Lagos",
+        medicalProfile: user.medicalProfile || {},
+        isOnline: isDoctorOnlineFromStatus(user.workloadStatus || "available"),
+        workloadStatus: user.workloadStatus || "available",
+        workloadStatusLabel: getDoctorWorkloadStatusLabel(
+          user.workloadStatus || "available",
+        ),
       },
     });
   } catch (error) {
@@ -104,7 +114,13 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         specialty: user.specialty || "",
-        isOnline: user.isOnline !== false,
+        timezone: user.timezone || "Africa/Lagos",
+        medicalProfile: user.medicalProfile || {},
+        isOnline: isDoctorOnlineFromStatus(user.workloadStatus || "available"),
+        workloadStatus: user.workloadStatus || "available",
+        workloadStatusLabel: getDoctorWorkloadStatusLabel(
+          user.workloadStatus || "available",
+        ),
       }
     });
   } catch (error) {

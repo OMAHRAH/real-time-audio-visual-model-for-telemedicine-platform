@@ -15,6 +15,9 @@ import patientRoutes from "./routes/patientRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
 import callRoutes from "./routes/callRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js";
+import schedulingRoutes from "./routes/schedulingRoutes.js";
 
 dotenv.config();
 connectDB();
@@ -72,6 +75,22 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
+  socket.on("notifications:join-user", ({ userId }) => {
+    if (!userId) {
+      return;
+    }
+
+    socket.join(`user:${userId}`);
+  });
+
+  socket.on("notifications:leave-user", ({ userId }) => {
+    if (!userId) {
+      return;
+    }
+
+    socket.leave(`user:${userId}`);
+  });
+
   socket.on("chat:join-room", ({ roomId }) => {
     if (!roomId) {
       return;
@@ -130,6 +149,9 @@ app.use("/api/patients", patientRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/calls", callRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/scheduling", schedulingRoutes);
 app.use("/uploads", express.static("uploads"));
 
 app.get("/", (req, res) => {

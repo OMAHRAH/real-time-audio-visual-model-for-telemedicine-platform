@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DOCTOR_WORKLOAD_STATUSES } from "../utils/doctorStatus.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -36,6 +37,37 @@ const userSchema = new mongoose.Schema(
     isOnline: {
       type: Boolean,
       default: true,
+    },
+
+    workloadStatus: {
+      type: String,
+      enum: DOCTOR_WORKLOAD_STATUSES,
+      default: "available",
+    },
+
+    timezone: {
+      type: String,
+      trim: true,
+      default: "Africa/Lagos",
+    },
+
+    medicalProfile: {
+      allergies: {
+        type: [String],
+        default: [],
+      },
+      medications: {
+        type: [String],
+        default: [],
+      },
+      medicalHistory: {
+        type: [String],
+        default: [],
+      },
+      ongoingConditions: {
+        type: [String],
+        default: [],
+      },
     },
   },
   {

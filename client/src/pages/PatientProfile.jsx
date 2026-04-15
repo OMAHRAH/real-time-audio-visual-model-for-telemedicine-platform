@@ -14,7 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { getCurrentUser } from "../auth";
+import { getAuthToken, getCurrentUser } from "../auth";
 import { SOCKET_URL, resolveServerUrl } from "../config/runtime";
 import useConversationCall from "../hooks/useConversationCall";
 
@@ -87,6 +87,15 @@ const getInitials = (name = "") =>
     .slice(0, 2)
     .join("")
     .toUpperCase() || "PT";
+
+const getActiveAdminTriageEmergency = (alerts, patientId) =>
+  alerts.find(
+    (alert) =>
+      alert?.type === "emergency" &&
+      alert?.status === "active" &&
+      getEntityId(alert.patient) === patientId &&
+      !getEntityId(alert.doctor),
+  ) || null;
 
 function AttachIcon({ className = "h-5 w-5" }) {
   return (
@@ -211,7 +220,7 @@ function VideoCallIcon({ className = "h-5 w-5" }) {
 }
 
 const getCurrentUserId = () => {
-  const token = localStorage.getItem("token");
+  const token = getAuthToken();
 
   if (!token) return null;
 
@@ -227,16 +236,21 @@ function PatientProfile() {
   const { id } = useParams();
   const currentUser = getCurrentUser();
   const currentUserId = getCurrentUserId();
+  const isAdminUser = currentUser?.role === "admin";
+  const canManageAppointments = currentUser?.role === "doctor";
   const [searchParams] = useSearchParams();
   const chatRef = useRef(null);
   const shouldOpenChat = searchParams.get("chat") === "1";
   const highlightedAppointmentId = searchParams.get("appointment");
+  const highlightedAlertId = searchParams.get("alert");
 
   const [patient, setPatient] = useState(null);
   const [vitals, setVitals] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
   const [messages, setMessages] = useState([]);
+  const [highlightedAlert, setHighlightedAlert] = useState(null);
+  const [activeEmergencyAlert, setActiveEmergencyAlert] = useState(null);
   const [newMessage, setNewMessage] = useState("");
   const [attachedFile, setAttachedFile] = useState(null);
   const [chatFeedback, setChatFeedback] = useState("");
@@ -246,6 +260,7 @@ function PatientProfile() {
   const [downloadedAudioUrls, setDownloadedAudioUrls] = useState({});
   const [downloadingAudioIds, setDownloadingAudioIds] = useState({});
   const [isRecordDrawerOpen, setIsRecordDrawerOpen] = useState(false);
+  const [isResolvingEmergency, setIsResolvingEmergency] = useState(false);
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const downloadedAudioUrlsRef = useRef({});
@@ -255,8 +270,8 @@ function PatientProfile() {
   );
 
   const [showSaveToast, setShowSaveToast] = useState(false);
-
-  const [savedNoteId] = useState(null);
+  const [savedRecordId, setSavedRecordId] = useState(null);
+  const savedNoteId = savedRecordId;
 
   const [latestVital, setLatestVital] = useState(null);
 
@@ -345,17 +360,29 @@ function PatientProfile() {
   useEffect(() => {
     const fetchPatientData = async () => {
       try {
-        const [patientRes, vitalsRes, apptRes, chatRes] = await Promise.all([
+        const [patientRes, vitalsRes, apptRes, chatRes, alertRes] = await Promise.all([
           API.get(`/patients/${id}`),
           API.get(`/vitals/patient/${id}`),
           API.get(`/appointments/patient/${id}`),
           API.get(`/chat/${id}`),
+          isAdminUser || currentUser?.role === "doctor"
+            ? API.get("/alerts")
+            : Promise.resolve({ data: [] }),
         ]);
 
         setPatient(patientRes.data.patient);
         setVitals(vitalsRes.data.vitals || []);
         setAppointments(apptRes.data.appointments || []);
         setMessages(chatRes.data || []);
+        setActiveEmergencyAlert(
+          isAdminUser
+            ? getActiveAdminTriageEmergency(alertRes.data || [], id)
+            : null,
+        );
+        setHighlightedAlert(
+          (alertRes.data || []).find((alert) => alert._id === highlightedAlertId) ||
+            null,
+        );
 
         const vitalEvents = vitalsRes.data.vitals.map((v) => ({
           type: "vital",
@@ -378,7 +405,6 @@ function PatientProfile() {
         if (vitalsRes.data.vitals?.length > 0) {
           setLatestVital(vitalsRes.data.vitals[0]);
         }
-
       } catch (err) {
         console.error(err);
       }
@@ -402,11 +428,13 @@ function PatientProfile() {
     };
 
     socket.on("new-message", handleIncomingMessage);
+    socket.on("conversation:new-message", handleIncomingMessage);
 
     return () => {
       socket.off("new-message", handleIncomingMessage);
+      socket.off("conversation:new-message", handleIncomingMessage);
     };
-  }, [id, markConversationAsRead]);
+  }, [currentUser?.role, highlightedAlertId, id, isAdminUser, markConversationAsRead]);
 
   useEffect(() => {
     markConversationAsRead();
@@ -605,7 +633,7 @@ function PatientProfile() {
     const senderId = getCurrentUserId();
 
     if (!senderId) {
-      alert("Unable to identify the logged-in doctor. Please log in again.");
+      alert("Unable to identify the logged-in staff user. Please log in again.");
       return;
     }
 
@@ -637,74 +665,119 @@ function PatientProfile() {
     }
   };
 
-  const saveNotes = async (appointmentId) => {
-    const notes = document.getElementById(`notes-${appointmentId}`).value;
+  const handleComposerKeyDown = (event) => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent?.isComposing
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!newMessage.trim() && !attachedFile) {
+      return;
+    }
+
+    sendMessage();
+  };
+
+  const resolveEmergencyCase = async () => {
+    if (!activeEmergencyAlert?._id) {
+      return;
+    }
+
+    const shouldResolve = window.confirm(
+      "Close this emergency case without routing it to a doctor?",
+    );
+
+    if (!shouldResolve) {
+      return;
+    }
+
+    setIsResolvingEmergency(true);
+    setChatFeedback("");
 
     try {
-      await API.patch(`/appointments/${appointmentId}/notes`, {
-        notes,
+      await API.patch(`/alerts/${activeEmergencyAlert._id}/resolve`, {
+        resolutionNote: "Resolved by admin after triage assessment.",
       });
+      setActiveEmergencyAlert(null);
+      setChatFeedback("Emergency case closed.");
+    } catch (error) {
+      console.error("Failed to resolve emergency case", error);
+      setChatFeedback(
+        error.response?.data?.message ||
+          "Unable to close the emergency case right now.",
+      );
+    } finally {
+      setIsResolvingEmergency(false);
+    }
+  };
+
+  const persistConsultationRecord = async (
+    appointmentId,
+    record,
+    options = {},
+  ) => {
+    try {
+      const res = await API.patch(
+        `/appointments/${appointmentId}/consultation-record`,
+        {
+          diagnosis: record?.diagnosis || "",
+          prescription: record?.prescription || "",
+          followUpPlan: record?.followUpPlan || "",
+          visitSummary: record?.visitSummary || "",
+          markCompleted: options.markCompleted === true,
+        },
+      );
 
       setAppointments((prev) =>
         prev.map((appt) =>
-          appt._id === appointmentId ? { ...appt, doctorNotes: notes } : appt,
+          appt._id === appointmentId ? res.data.appointment : appt,
         ),
       );
 
+      setSavedRecordId(appointmentId);
       setShowSaveToast(true);
 
       setTimeout(() => {
+        setSavedRecordId(null);
         setShowSaveToast(false);
       }, 2000);
 
       setExpandedAppointment(null);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error("Failed to save consultation record", error);
     }
   };
 
-  const completeAppointment = async (appointmentId) => {
-    try {
-      await API.patch(`/appointments/${appointmentId}/status`, {
-        status: "completed",
-      });
+  const saveConsultationRecord = (appointmentId, record, options = {}) =>
+    persistConsultationRecord(appointmentId, record, options);
 
-      setAppointments((prev) =>
-        prev.map((appt) =>
-          appt._id === appointmentId ? { ...appt, status: "completed" } : appt,
-        ),
-      );
+  const completeAppointment = (appointmentId, record) =>
+    persistConsultationRecord(appointmentId, record, {
+      markCompleted: true,
+    });
 
-      setExpandedAppointment(null);
-    } catch (err) {
-      console.error(err);
-    }
+  const saveNotes = async (appointmentId) => {
+    const notes = document.getElementById(`notes-${appointmentId}`)?.value || "";
+    await persistConsultationRecord(
+      appointmentId,
+      { visitSummary: notes },
+      { markCompleted: false },
+    );
   };
 
   const autoSaveNotes = async (appointmentId, notes) => {
     if (!notes) return;
 
-    try {
-      await API.patch(`/appointments/${appointmentId}/notes`, {
-        notes,
-      });
-
-      setAppointments((prev) =>
-        prev.map((appt) =>
-          appt._id === appointmentId ? { ...appt, doctorNotes: notes } : appt,
-        ),
-      );
-
-      setShowSaveToast(true);
-
-      setTimeout(() => {
-        setShowSaveToast(false);
-      }, 2000);
-
-      setExpandedAppointment(null);
-    } catch (err) {
-      console.error(err);
-    }
+    await persistConsultationRecord(
+      appointmentId,
+      { visitSummary: notes },
+      { markCompleted: false },
+    );
   };
 
   const toggleAppointment = (appointmentId) => {
@@ -716,17 +789,21 @@ function PatientProfile() {
   return (
     <DoctorShell
       title={patient?.name || "Patient Profile"}
-      subtitle="Consult the patient record, review historical readings and continue the conversation."
+      subtitle={
+        isAdminUser
+          ? "Assess the emergency case, continue triage, and hand the patient to a doctor when intervention is required."
+          : "Consult the patient record, review historical readings and continue the conversation."
+      }
     >
       {showSaveToast && (
         <div className="hidden fixed right-4 top-20 z-50 rounded-2xl bg-green-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          ✓ Notes saved
+          Consultation record saved
         </div>
       )}
 
       {showSaveToast && (
         <div className="fixed right-4 top-20 z-50 rounded-2xl bg-green-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          Notes saved
+          Consultation record saved
         </div>
       )}
 
@@ -778,11 +855,11 @@ function PatientProfile() {
             appointments={appointments}
             expandedAppointment={expandedAppointment}
             onToggleAppointment={toggleAppointment}
-            onSaveNotes={saveNotes}
+            onSaveConsultationRecord={saveConsultationRecord}
             onCompleteAppointment={completeAppointment}
-            onAutoSaveNotes={autoSaveNotes}
-            savedNoteId={savedNoteId}
+            savedRecordId={savedRecordId}
             compact
+            readOnly={!canManageAppointments}
           />
         </div>
       </div>
@@ -853,10 +930,10 @@ function PatientProfile() {
             appointments={appointments}
             expandedAppointment={expandedAppointment}
             onToggleAppointment={toggleAppointment}
-            onSaveNotes={saveNotes}
+            onSaveConsultationRecord={saveConsultationRecord}
             onCompleteAppointment={completeAppointment}
-            onAutoSaveNotes={autoSaveNotes}
-            savedNoteId={savedNoteId}
+            savedRecordId={savedRecordId}
+            readOnly={!canManageAppointments}
           />
         </div>
 
@@ -1212,6 +1289,30 @@ function PatientProfile() {
             </div>
           </div>
 
+          {isAdminUser && activeEmergencyAlert && (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-rose-700">
+                    Emergency triage is active
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Close the case here if the issue was resolved during triage and no doctor handoff is needed.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resolveEmergencyCase}
+                  disabled={isResolvingEmergency}
+                  className="inline-flex items-center justify-center rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isResolvingEmergency ? "Closing..." : "Close emergency"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <ConversationCallPanel
             participantName={patient?.name || "Patient"}
             callState={call.callState}
@@ -1242,6 +1343,25 @@ function PatientProfile() {
                   highlightedAppointment.appointmentDate,
                 ).toLocaleString()}{" "}
                 | Status: {highlightedAppointment.status}
+              </p>
+            </div>
+          )}
+
+          {highlightedAlert && (
+            <div className="mb-4 rounded border border-rose-100 bg-rose-50 p-4">
+              <p className="text-sm font-semibold text-rose-900">
+                {highlightedAlert.type === "emergency"
+                  ? "Emergency context"
+                  : "Critical alert context"}
+              </p>
+              <p className="mt-1 text-sm text-rose-800">
+                {highlightedAlert.type === "emergency"
+                  ? highlightedAlert.message
+                  : `BP ${highlightedAlert.systolic || "-"}/${highlightedAlert.diastolic || "-"} | Glucose ${highlightedAlert.glucoseLevel || "-"}`}
+              </p>
+              <p className="mt-2 text-xs text-rose-700">
+                {new Date(highlightedAlert.createdAt).toLocaleString()} | Status:{" "}
+                {highlightedAlert.status || "active"}
               </p>
             </div>
           )}
@@ -1449,6 +1569,7 @@ function PatientProfile() {
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
               className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-3"
               placeholder="Type message..."
             />

@@ -1,15 +1,214 @@
-import { Fragment } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 
 const sectionClass = "rounded-3xl border border-slate-200 bg-white shadow-sm";
+
+const buildInitialDraft = (appointment) => ({
+  diagnosis: appointment?.diagnosis || "",
+  prescription: appointment?.prescription || "",
+  followUpPlan: appointment?.followUpPlan || "",
+  visitSummary: appointment?.visitSummary || appointment?.doctorNotes || "",
+});
+
+const hasConsultationContent = (appointment) =>
+  Boolean(
+    appointment?.diagnosis ||
+      appointment?.prescription ||
+      appointment?.followUpPlan ||
+      appointment?.visitSummary ||
+      appointment?.doctorNotes,
+  );
+
+const getAppointmentDoctorLabel = (appointment) =>
+  appointment.doctor?.name ||
+  appointment.preferredDoctor?.name ||
+  "Awaiting admin routing";
+
+function ConsultationRecordFields({
+  appointment,
+  readOnly,
+  draft,
+  onChange,
+  onSave,
+  onComplete,
+  savedRecordId,
+}) {
+  if (readOnly) {
+    if (!hasConsultationContent(appointment)) {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          No consultation record has been added yet.
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-3 lg:grid-cols-2">
+        {appointment.diagnosis ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Diagnosis
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              {appointment.diagnosis}
+            </p>
+          </div>
+        ) : null}
+
+        {appointment.prescription ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Prescription
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              {appointment.prescription}
+            </p>
+          </div>
+        ) : null}
+
+        {appointment.followUpPlan ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Follow-up plan
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              {appointment.followUpPlan}
+            </p>
+          </div>
+        ) : null}
+
+        {(appointment.visitSummary || appointment.doctorNotes) ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Visit summary
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+              {appointment.visitSummary || appointment.doctorNotes}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Diagnosis
+          </label>
+          <textarea
+            value={draft.diagnosis}
+            onChange={(event) => onChange("diagnosis", event.target.value)}
+            placeholder="Clinical impression and diagnosis"
+            className="min-h-24 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Prescription
+          </label>
+          <textarea
+            value={draft.prescription}
+            onChange={(event) => onChange("prescription", event.target.value)}
+            placeholder="Medication, dosage, and instructions"
+            className="min-h-24 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Follow-up plan
+          </label>
+          <textarea
+            value={draft.followUpPlan}
+            onChange={(event) => onChange("followUpPlan", event.target.value)}
+            placeholder="Tests, review date, or next step"
+            className="min-h-24 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Visit summary
+          </label>
+          <textarea
+            value={draft.visitSummary}
+            onChange={(event) => onChange("visitSummary", event.target.value)}
+            placeholder="Summarize the consultation in patient-ready language"
+            className="min-h-24 w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
+      </div>
+
+      {savedRecordId === appointment._id ? (
+        <p className="mt-3 text-sm font-medium text-emerald-600">
+          Consultation record saved
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onSave(appointment._id)}
+          className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+        >
+          Save record
+        </button>
+        <button
+          type="button"
+          onClick={() => onComplete(appointment._id)}
+          className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+        >
+          Complete visit
+        </button>
+      </div>
+    </>
+  );
+}
+
+function AppointmentDetails({
+  appointment,
+  readOnly,
+  draft,
+  onDraftChange,
+  onSaveConsultationRecord,
+  onCompleteAppointment,
+  savedRecordId,
+}) {
+  return (
+    <div className="space-y-3">
+      {appointment.reason ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+          <p className="text-sm font-semibold text-blue-900">
+            Appointment reason
+          </p>
+          <p className="mt-1 text-sm text-blue-800">{appointment.reason}</p>
+        </div>
+      ) : null}
+
+      <ConsultationRecordFields
+        appointment={appointment}
+        readOnly={readOnly}
+        draft={draft}
+        onChange={onDraftChange}
+        onSave={onSaveConsultationRecord}
+        onComplete={onCompleteAppointment}
+        savedRecordId={savedRecordId}
+      />
+    </div>
+  );
+}
 
 function PatientRecordPanel({
   patient,
@@ -22,10 +221,9 @@ function PatientRecordPanel({
   appointments,
   expandedAppointment,
   onToggleAppointment,
-  onSaveNotes,
+  onSaveConsultationRecord,
   onCompleteAppointment,
-  onAutoSaveNotes,
-  savedNoteId,
+  savedRecordId,
   compact = false,
   readOnly = false,
 }) {
@@ -34,10 +232,45 @@ function PatientRecordPanel({
     systolic: vital.systolic,
     glucoseLevel: vital.glucoseLevel,
   }));
-  const getAppointmentDoctorLabel = (appointment) =>
-    appointment.doctor?.name ||
-    appointment.preferredDoctor?.name ||
-    "Awaiting admin routing";
+  const [draftsByAppointment, setDraftsByAppointment] = useState({});
+
+  const getAppointmentDraft = useMemo(
+    () => (appointment) =>
+      draftsByAppointment[appointment._id] || buildInitialDraft(appointment),
+    [draftsByAppointment],
+  );
+
+  const updateAppointmentDraft = (appointmentId, field, value) => {
+    setDraftsByAppointment((prev) => ({
+      ...prev,
+      [appointmentId]: {
+        ...(prev[appointmentId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveConsultationRecord = (appointmentId) => {
+    const appointment = appointments.find((item) => item._id === appointmentId);
+
+    if (!appointment) {
+      return;
+    }
+
+    onSaveConsultationRecord(appointmentId, getAppointmentDraft(appointment), {
+      markCompleted: false,
+    });
+  };
+
+  const handleCompleteAppointment = (appointmentId) => {
+    const appointment = appointments.find((item) => item._id === appointmentId);
+
+    if (!appointment) {
+      return;
+    }
+
+    onCompleteAppointment(appointmentId, getAppointmentDraft(appointment));
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -101,6 +334,36 @@ function PatientRecordPanel({
               {patient?.email}
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className={`p-5 sm:p-6 ${sectionClass}`}>
+        <h2 className="text-xl font-semibold">Medical Profile</h2>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {[
+            ["Allergies", patient?.medicalProfile?.allergies],
+            ["Current medications", patient?.medicalProfile?.medications],
+            ["Medical history", patient?.medicalProfile?.medicalHistory],
+            ["Ongoing conditions", patient?.medicalProfile?.ongoingConditions],
+          ].map(([label, items]) => (
+            <div key={label} className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm text-slate-500">{label}</p>
+              {Array.isArray(items) && items.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {items.map((item) => (
+                    <span
+                      key={`${label}-${item}`}
+                      className="rounded-full bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-slate-500">No details added yet.</p>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -245,11 +508,11 @@ function PatientRecordPanel({
                   <p className="text-sm text-slate-600">
                     Glucose: {event.data.glucoseLevel}
                   </p>
-                  {event.data.flagged && (
+                  {event.data.flagged ? (
                     <p className="mt-1 text-sm font-semibold text-red-600">
                       Critical Alert
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -258,11 +521,12 @@ function PatientRecordPanel({
                   <p className="font-semibold text-slate-900">
                     Appointment ({event.data.status})
                   </p>
-                  {event.data.doctorNotes && (
+                  {event.data.visitSummary || event.data.doctorNotes ? (
                     <p className="mt-1 text-sm text-slate-600">
-                      Notes: {event.data.doctorNotes}
+                      Summary:{" "}
+                      {event.data.visitSummary || event.data.doctorNotes}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -326,66 +590,21 @@ function PatientRecordPanel({
                   </span>
                 </button>
 
-                {expandedAppointment === appointment._id && (
+                {expandedAppointment === appointment._id ? (
                   <div className="border-t border-slate-200 bg-slate-50 p-4">
-                    {appointment.reason && (
-                      <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                        <p className="text-sm font-semibold text-blue-900">
-                          Appointment reason
-                        </p>
-                        <p className="mt-1 text-sm text-blue-800">
-                          {appointment.reason}
-                        </p>
-                      </div>
-                    )}
-
-                    {readOnly ? (
-                      <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                        <p className="font-medium text-slate-900">
-                          Clinical notes
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap">
-                          {appointment.doctorNotes || "No notes added yet."}
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <textarea
-                          id={`notes-${appointment._id}`}
-                          defaultValue={appointment.doctorNotes}
-                          placeholder="Write visit notes..."
-                          className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
-                          onBlur={(event) =>
-                            onAutoSaveNotes(appointment._id, event.target.value)
-                          }
-                        />
-
-                        {savedNoteId === appointment._id && (
-                          <p className="mt-2 text-sm text-emerald-600">
-                            Notes saved
-                          </p>
-                        )}
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onSaveNotes(appointment._id)}
-                            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-                          >
-                            Save Notes
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onCompleteAppointment(appointment._id)}
-                            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                          >
-                            Complete Visit
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <AppointmentDetails
+                      appointment={appointment}
+                      readOnly={readOnly}
+                      draft={getAppointmentDraft(appointment)}
+                      onDraftChange={(field, value) =>
+                        updateAppointmentDraft(appointment._id, field, value)
+                      }
+                      onSaveConsultationRecord={handleSaveConsultationRecord}
+                      onCompleteAppointment={handleCompleteAppointment}
+                      savedRecordId={savedRecordId}
+                    />
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
@@ -428,73 +647,29 @@ function PatientRecordPanel({
                       </td>
                     </tr>
 
-                    {expandedAppointment === appointment._id && (
+                    {expandedAppointment === appointment._id ? (
                       <tr>
                         <td colSpan="3" className="bg-slate-50 p-4">
-                          {appointment.reason && (
-                            <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                              <p className="text-sm font-semibold text-blue-900">
-                                Appointment reason
-                              </p>
-                              <p className="mt-1 text-sm text-blue-800">
-                                {appointment.reason}
-                              </p>
-                            </div>
-                          )}
-
-                          {readOnly ? (
-                            <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                              <p className="font-medium text-slate-900">
-                                Clinical notes
-                              </p>
-                              <p className="mt-1 whitespace-pre-wrap">
-                                {appointment.doctorNotes || "No notes added yet."}
-                              </p>
-                            </div>
-                          ) : (
-                            <>
-                              <textarea
-                                id={`notes-${appointment._id}`}
-                                defaultValue={appointment.doctorNotes}
-                                placeholder="Write visit notes..."
-                                className="min-h-28 w-full rounded-2xl border border-slate-200 p-3"
-                                onBlur={(event) =>
-                                  onAutoSaveNotes(
-                                    appointment._id,
-                                    event.target.value,
-                                  )
-                                }
-                              />
-
-                              {savedNoteId === appointment._id && (
-                                <p className="mt-2 text-sm text-emerald-600">
-                                  Notes saved
-                                </p>
-                              )}
-
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => onSaveNotes(appointment._id)}
-                                  className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-                                >
-                                  Save Notes
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onCompleteAppointment(appointment._id)
-                                  }
-                                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                                >
-                                  Complete Visit
-                                </button>
-                              </div>
-                            </>
-                          )}
+                          <AppointmentDetails
+                            appointment={appointment}
+                            readOnly={readOnly}
+                            draft={getAppointmentDraft(appointment)}
+                            onDraftChange={(field, value) =>
+                              updateAppointmentDraft(
+                                appointment._id,
+                                field,
+                                value,
+                              )
+                            }
+                            onSaveConsultationRecord={
+                              handleSaveConsultationRecord
+                            }
+                            onCompleteAppointment={handleCompleteAppointment}
+                            savedRecordId={savedRecordId}
+                          />
                         </td>
                       </tr>
-                    )}
+                    ) : null}
                   </Fragment>
                 ))}
               </tbody>

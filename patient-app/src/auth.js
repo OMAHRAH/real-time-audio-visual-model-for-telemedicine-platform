@@ -47,3 +47,11 @@ export const logout = () => {
   localStorage.removeItem("user");
   localStorage.removeItem("patientId");
 };
+
+export const storeStoredUser = (user) => {
+  if (!user) {
+    return;
+  }
+
+  localStorage.setItem("user", JSON.stringify(user));
+};

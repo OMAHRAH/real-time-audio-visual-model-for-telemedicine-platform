@@ -36,9 +36,19 @@ const vitalReadingSchema = new mongoose.Schema(
       default: false,
     },
 
+    routedAt: {
+      type: Date,
+      default: null,
+    },
+
     reviewedByDoctor: {
       type: Boolean,
       default: false,
+    },
+
+    reviewedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

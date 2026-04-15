@@ -5,6 +5,7 @@ import {
   getPatientAppointments,
   updateAppointmentStatus,
   addDoctorNotes,
+  updateConsultationRecord,
 } from "../controllers/appointmentController.js";
 import { authorize, protect } from "../middlewares/authMiddleware.js";
 
@@ -21,5 +22,11 @@ router.get(
 router.patch("/:id", protect, updateAppointmentStatus);
 router.patch("/:id/status", protect, updateAppointmentStatus);
 router.patch("/:id/notes", protect, authorize("doctor"), addDoctorNotes);
+router.patch(
+  "/:id/consultation-record",
+  protect,
+  authorize("doctor"),
+  updateConsultationRecord,
+);
 
 export default router;

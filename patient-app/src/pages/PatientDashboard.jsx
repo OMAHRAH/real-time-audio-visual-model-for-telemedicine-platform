@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import API from "../api/api";
 import { getPatientId, getStoredUser } from "../auth";
 import AppointmentCard from "../components/AppointmentCard";
 import useUnreadChats from "../hooks/useUnreadChats";
+import { SOCKET_URL } from "../config/runtime";
+
+const socket = io(SOCKET_URL, { autoConnect: false });
 
 function CalendarIcon({ className = "h-5 w-5" }) {
   return (
@@ -234,6 +238,12 @@ function DoctorSpotlightCard({ doctor }) {
     .map((part) => part[0]?.toUpperCase())
     .join("");
 
+  const statusClassName = doctor.acceptingNewPatients
+    ? "bg-emerald-50 text-emerald-700"
+    : doctor.isOnline
+      ? "bg-amber-50 text-amber-700"
+      : "bg-slate-100 text-slate-500";
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm sm:p-5">
       <div className="flex items-start justify-between gap-4">
@@ -248,8 +258,8 @@ function DoctorSpotlightCard({ doctor }) {
           </div>
         </div>
 
-        <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-          Online
+        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusClassName}`}>
+          {doctor.workloadStatusLabel || (doctor.isOnline ? "Online" : "Offline")}
         </span>
       </div>
 
@@ -264,7 +274,17 @@ function DoctorSpotlightCard({ doctor }) {
 
         <Link
           to={`/chat?doctor=${doctor._id}`}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+            doctor.isOnline
+              ? "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+          }`}
+          aria-disabled={!doctor.isOnline}
+          onClick={(event) => {
+            if (!doctor.isOnline) {
+              event.preventDefault();
+            }
+          }}
         >
           Open chat
         </Link>
@@ -298,16 +318,18 @@ const getLatestBloodPressure = (latestVital) => {
 };
 
 export default function PatientDashboard() {
+  const navigate = useNavigate();
   const user = getStoredUser();
   const patientId = getPatientId();
   const { totalUnreadConversations } = useUnreadChats();
   const [latestVital, setLatestVital] = useState(null);
   const [appointments, setAppointments] = useState([]);
-  const [onlineDoctors, setOnlineDoctors] = useState([]);
+  const [availableDoctors, setAvailableDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [emergencyState, setEmergencyState] = useState({
     loading: false,
     message: "",
+    contactId: "",
   });
 
   useEffect(() => {
@@ -316,13 +338,13 @@ export default function PatientDashboard() {
         const [vitalsRes, appointmentsRes, doctorsRes] = await Promise.all([
           API.get(`/vitals/patient/${patientId}`),
           API.get("/appointments"),
-          API.get("/doctors?online=true"),
+          API.get("/doctors?available=true"),
         ]);
 
         const doctors = doctorsRes.data.doctors ?? [];
         setLatestVital(vitalsRes.data.vitals?.[0] ?? null);
         setAppointments(appointmentsRes.data.appointments ?? []);
-        setOnlineDoctors(doctors);
+        setAvailableDoctors(doctors);
       } catch (error) {
         console.error("Failed to load patient dashboard", error);
       } finally {
@@ -333,6 +355,47 @@ export default function PatientDashboard() {
     if (patientId) {
       fetchDashboard();
     }
+  }, [patientId]);
+
+  useEffect(() => {
+    if (!patientId) {
+      return undefined;
+    }
+
+    socket.connect();
+
+    const handleEmergencyResolved = (payload) => {
+      if (String(payload?.patientId || "") !== patientId) {
+        return;
+      }
+
+      setEmergencyState({
+        loading: false,
+        message: "Emergency case closed by admin.",
+        contactId: "",
+      });
+    };
+
+    const handleEmergencyRouted = (payload) => {
+      if (String(payload?.patientId || "") !== patientId) {
+        return;
+      }
+
+      setEmergencyState({
+        loading: false,
+        message: "Your emergency case has been handed to a doctor.",
+        contactId: String(payload?.doctorId || ""),
+      });
+    };
+
+    socket.on("emergency-resolved", handleEmergencyResolved);
+    socket.on("emergency-routed", handleEmergencyRouted);
+
+    return () => {
+      socket.off("emergency-resolved", handleEmergencyResolved);
+      socket.off("emergency-routed", handleEmergencyRouted);
+      socket.disconnect();
+    };
   }, [patientId]);
 
   const activeAppointments = useMemo(
@@ -378,14 +441,17 @@ export default function PatientDashboard() {
     setEmergencyState({
       loading: true,
       message: "",
+      contactId: "",
     });
 
     try {
       const res = await API.post("/alerts/emergency");
+      const activeContactId = res.data?.activeContact?._id || "";
 
       setEmergencyState({
         loading: false,
         message: res.data.message || "Emergency alert sent",
+        contactId: activeContactId,
       });
     } catch (error) {
       setEmergencyState({
@@ -393,6 +459,7 @@ export default function PatientDashboard() {
         message:
           error.response?.data?.message ||
           "Unable to send emergency alert right now.",
+        contactId: "",
       });
     }
   };
@@ -488,8 +555,8 @@ export default function PatientDashboard() {
                 </div>
 
                 <span className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white">
-                  {onlineDoctors.length} doctor
-                  {onlineDoctors.length === 1 ? "" : "s"} online
+                  {availableDoctors.length} doctor
+                  {availableDoctors.length === 1 ? "" : "s"} available
                 </span>
               </div>
 
@@ -505,12 +572,12 @@ export default function PatientDashboard() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          title="Online doctors"
-          value={onlineDoctors.length}
+          title="Available doctors"
+          value={availableDoctors.length}
           subtitle={
-            onlineDoctors.length > 0
-              ? "Available for appointment and chat"
-              : "No doctors online right now"
+            availableDoctors.length > 0
+              ? "Ready for instant booking and live chat"
+              : "No doctors are marked available right now"
           }
           tone="blue"
           icon={<DoctorsIcon />}
@@ -560,7 +627,7 @@ export default function PatientDashboard() {
                 Ready for consultation
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
-                Reach doctors who are live in the system right now.
+                Reach doctors who are marked available for new patient requests right now.
               </p>
             </div>
 
@@ -577,10 +644,10 @@ export default function PatientDashboard() {
             <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
               Loading doctors...
             </div>
-          ) : onlineDoctors.length === 0 ? (
+          ) : availableDoctors.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
               <p className="text-base font-medium text-slate-700">
-                No doctors are currently online.
+                No doctors are currently available.
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 You can still schedule an appointment for later from the booking
@@ -589,7 +656,7 @@ export default function PatientDashboard() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {onlineDoctors.slice(0, 4).map((doctor) => (
+              {availableDoctors.slice(0, 4).map((doctor) => (
                 <DoctorSpotlightCard key={doctor._id} doctor={doctor} />
               ))}
             </div>
@@ -620,9 +687,10 @@ export default function PatientDashboard() {
                     Priority routing
                   </p>
                   <p className="emergency-panel-note-copy mt-1 text-sm leading-6 text-slate-600">
-                    If you already have an assigned doctor, the alert follows
-                    that care relationship. Otherwise admin will route it to the
-                    fastest responder.
+                    Emergency requests now go to admin triage first so the
+                    situation can be assessed properly before a doctor is pulled
+                    in. If intervention is needed, admin routes the case with
+                    your existing chat history attached.
                   </p>
                 </div>
               </div>
@@ -642,7 +710,19 @@ export default function PatientDashboard() {
 
             {emergencyState.message && (
               <div className="emergency-panel-feedback rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
-                {emergencyState.message}
+                <p>{emergencyState.message}</p>
+                {emergencyState.contactId && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/chat?doctor=${emergencyState.contactId}`)
+                    }
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+                  >
+                    Open emergency chat
+                    <ArrowRightIcon />
+                  </button>
+                )}
               </div>
             )}
           </div>

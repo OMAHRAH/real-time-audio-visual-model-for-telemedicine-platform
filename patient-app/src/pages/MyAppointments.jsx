@@ -3,9 +3,21 @@ import { Link } from "react-router-dom";
 import API from "../api/api";
 import AppointmentCard from "../components/AppointmentCard";
 
+const isReschedulable = (appointment) =>
+  appointment.status !== "completed" &&
+  new Date(appointment.appointmentDate).getTime() > Date.now();
+
 export default function MyAppointments() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedAppointmentId, setExpandedAppointmentId] = useState("");
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlotId, setSelectedSlotId] = useState("");
+  const [manualDate, setManualDate] = useState("");
+  const [rescheduleReason, setRescheduleReason] = useState("");
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [workingAppointmentId, setWorkingAppointmentId] = useState("");
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -22,6 +34,74 @@ export default function MyAppointments() {
     fetchAppointments();
   }, []);
 
+  const loadSlotsForAppointment = async (appointment) => {
+    const doctorId = appointment.doctor?._id || appointment.preferredDoctor?._id;
+
+    if (!doctorId) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    setLoadingSlots(true);
+
+    try {
+      const res = await API.get(`/scheduling/doctors/${doctorId}/slots`);
+      setAvailableSlots(res.data.slots ?? []);
+    } catch (error) {
+      console.error("Failed to fetch reschedule slots", error);
+      setAvailableSlots([]);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const openReschedule = async (appointment) => {
+    const nextId = expandedAppointmentId === appointment._id ? "" : appointment._id;
+    setExpandedAppointmentId(nextId);
+    setSelectedSlotId("");
+    setManualDate("");
+    setRescheduleReason("");
+    setFeedback("");
+
+    if (nextId) {
+      await loadSlotsForAppointment(appointment);
+    }
+  };
+
+  const submitReschedule = async (appointment) => {
+    setWorkingAppointmentId(appointment._id);
+    setFeedback("");
+
+    try {
+      const res = await API.patch(
+        `/scheduling/appointments/${appointment._id}/reschedule`,
+        {
+          slotId: selectedSlotId || undefined,
+          appointmentDate: selectedSlotId ? undefined : manualDate,
+          appointmentTimezone: appointment.appointmentTimezone,
+          rescheduleReason,
+        },
+      );
+
+      setAppointments((prev) =>
+        prev.map((item) =>
+          item._id === appointment._id ? res.data.appointment : item,
+        ),
+      );
+      setExpandedAppointmentId("");
+      setAvailableSlots([]);
+      setFeedback("Appointment rescheduled.");
+    } catch (error) {
+      console.error("Failed to reschedule appointment", error);
+      setFeedback(
+        error.response?.data?.message ||
+          "Unable to reschedule the appointment right now.",
+      );
+    } finally {
+      setWorkingAppointmentId("");
+    }
+  };
+
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -33,7 +113,7 @@ export default function MyAppointments() {
             My appointments
           </h2>
           <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-            Track approved, pending, and completed visits.
+            Track approved, pending, completed, and rescheduled visits.
           </p>
         </div>
 
@@ -45,6 +125,12 @@ export default function MyAppointments() {
         </Link>
       </div>
 
+      {feedback ? (
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          {feedback}
+        </div>
+      ) : null}
+
       {loading ? (
         <p className="text-slate-500">Loading appointments...</p>
       ) : appointments.length === 0 ? (
@@ -52,9 +138,105 @@ export default function MyAppointments() {
           No appointments yet. Book your first consultation.
         </p>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
           {appointments.map((appointment) => (
-            <AppointmentCard key={appointment._id} appointment={appointment} />
+            <div key={appointment._id} className="rounded-3xl border border-slate-200 p-4">
+              <AppointmentCard appointment={appointment} />
+
+              {isReschedulable(appointment) ? (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => openReschedule(appointment)}
+                    className="text-sm font-medium text-blue-600"
+                  >
+                    {expandedAppointmentId === appointment._id
+                      ? "Close reschedule"
+                      : "Reschedule appointment"}
+                  </button>
+
+                  {expandedAppointmentId === appointment._id ? (
+                    <div className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4">
+                      {loadingSlots ? (
+                        <p className="text-sm text-slate-500">Loading slots...</p>
+                      ) : availableSlots.length > 0 ? (
+                        <div className="space-y-2">
+                          {availableSlots.slice(0, 6).map((slot) => (
+                            <button
+                              key={slot._id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSlotId(slot._id);
+                                setManualDate("");
+                              }}
+                              className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                                selectedSlotId === slot._id
+                                  ? "border-blue-500 bg-blue-50"
+                                  : "border-slate-200 bg-white hover:border-slate-300"
+                              }`}
+                            >
+                              <p className="font-medium text-slate-900">
+                                {new Date(slot.start).toLocaleString()}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Ends {new Date(slot.end).toLocaleTimeString()} | {slot.timezone}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          No open slots published yet for this doctor.
+                        </p>
+                      )}
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                          Or request a manual time
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={manualDate}
+                          onChange={(event) => {
+                            setManualDate(event.target.value);
+                            setSelectedSlotId("");
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                          Reason for reschedule
+                        </label>
+                        <textarea
+                          value={rescheduleReason}
+                          onChange={(event) =>
+                            setRescheduleReason(event.target.value)
+                          }
+                          className="min-h-24 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                          placeholder="Tell the care team why this appointment needs to move"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={
+                          workingAppointmentId === appointment._id ||
+                          (!selectedSlotId && !manualDate)
+                        }
+                        onClick={() => submitReschedule(appointment)}
+                        className="w-full rounded-2xl bg-blue-600 py-3 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                      >
+                        {workingAppointmentId === appointment._id
+                          ? "Rescheduling..."
+                          : "Confirm reschedule"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
       )}

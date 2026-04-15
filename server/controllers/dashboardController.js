@@ -2,6 +2,7 @@ import User from "../models/user.js";
 import Appointment from "../models/appointment.js";
 import VitalReading from "../models/VitalReading.js";
 import CareAssignment from "../models/CareAssignment.js";
+import Alert from "../models/Alert.js";
 
 export const getDoctorDashboard = async (req, res) => {
   try {
@@ -11,7 +12,12 @@ export const getDoctorDashboard = async (req, res) => {
 
     const doctorId = req.user.id;
 
-    const [activeAssignments, appointmentPatientIds, vitalPatientIds] =
+    const [
+      activeAssignments,
+      appointmentPatientIds,
+      vitalPatientIds,
+      emergencyPatientIds,
+    ] =
       await Promise.all([
         CareAssignment.find({
           doctor: doctorId,
@@ -21,12 +27,18 @@ export const getDoctorDashboard = async (req, res) => {
           .lean(),
         Appointment.distinct("patient", { doctor: doctorId }),
         VitalReading.distinct("patient", { doctor: doctorId }),
+        Alert.distinct("patient", {
+          doctor: doctorId,
+          type: "emergency",
+          status: "active",
+        }),
       ]);
 
     const totalPatients = new Set([
       ...activeAssignments.map((assignment) => assignment.patient.toString()),
       ...appointmentPatientIds.map((patientId) => patientId.toString()),
       ...vitalPatientIds.map((patientId) => patientId.toString()),
+      ...emergencyPatientIds.map((patientId) => patientId.toString()),
     ]).size;
 
     // Total appointments
@@ -53,6 +65,12 @@ export const getDoctorDashboard = async (req, res) => {
       reviewedByDoctor: false,
     });
 
+    const activeEmergencyAlerts = await Alert.countDocuments({
+      doctor: doctorId,
+      type: "emergency",
+      status: "active",
+    });
+
     // Appointments today
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
@@ -72,6 +90,7 @@ export const getDoctorDashboard = async (req, res) => {
       pendingAppointments,
       approvedAppointments,
       flaggedVitals,
+      activeEmergencyAlerts,
       appointmentsToday,
     });
   } catch (error) {

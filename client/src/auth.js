@@ -1,3 +1,8 @@
+const AUTH_TOKEN_KEY = "token";
+const AUTH_USER_KEY = "user";
+
+const getAuthStorage = () => window.sessionStorage;
+
 const decodeToken = (token) => {
   try {
     const payload = token.split(".")[1];
@@ -13,18 +18,41 @@ const decodeToken = (token) => {
   }
 };
 
+export const getAuthToken = () => {
+  return getAuthStorage().getItem(AUTH_TOKEN_KEY);
+};
+
+export const storeAuthSession = ({ token, user }) => {
+  const storage = getAuthStorage();
+
+  if (token) {
+    storage.setItem(AUTH_TOKEN_KEY, token);
+  }
+
+  if (user) {
+    storage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  }
+};
+
+export const clearAuthSession = () => {
+  const storage = getAuthStorage();
+  storage.removeItem(AUTH_TOKEN_KEY);
+  storage.removeItem(AUTH_USER_KEY);
+};
+
 export const getCurrentUser = () => {
-  const rawUser = localStorage.getItem("user");
+  const storage = getAuthStorage();
+  const rawUser = storage.getItem(AUTH_USER_KEY);
 
   if (rawUser) {
     try {
       return JSON.parse(rawUser);
     } catch {
-      localStorage.removeItem("user");
+      storage.removeItem(AUTH_USER_KEY);
     }
   }
 
-  const token = localStorage.getItem("token");
+  const token = storage.getItem(AUTH_TOKEN_KEY);
 
   if (!token) return null;
 
@@ -38,10 +66,13 @@ export const isDoctorUser = () => {
 };
 
 export const logout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearAuthSession();
 };
 
 export const storeCurrentUser = (user) => {
-  localStorage.setItem("user", JSON.stringify(user));
+  if (!user) {
+    return;
+  }
+
+  getAuthStorage().setItem(AUTH_USER_KEY, JSON.stringify(user));
 };

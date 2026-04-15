@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth";
+import useNotificationSummary from "../hooks/useNotificationSummary";
 import useUnreadPatientMessages from "../hooks/useUnreadPatientMessages";
 import useTheme from "../hooks/useTheme";
 
@@ -66,6 +67,7 @@ function SunIcon({ className = "h-5 w-5" }) {
 function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const currentUser = getCurrentUser();
   const { totalUnreadConversations } = useUnreadPatientMessages();
+  const { unreadCount } = useNotificationSummary();
   const { isDark, toggleTheme } = useTheme();
   const isAdmin = currentUser?.role === "admin";
   const navItems = isAdmin
@@ -74,6 +76,12 @@ function Sidebar({ mobileOpen = false, onClose = () => {} }) {
           to: "/",
           label: "Dashboard",
           description: "Routing, staffing and intake control",
+        },
+        {
+          to: "/notifications",
+          label: "Notifications",
+          description: "Routing, triage and care updates",
+          showNotificationBadge: true,
         },
         {
           to: "/patients",
@@ -86,6 +94,12 @@ function Sidebar({ mobileOpen = false, onClose = () => {} }) {
           to: "/",
           label: "Dashboard",
           description: "Overview, alerts and appointments",
+        },
+        {
+          to: "/notifications",
+          label: "Notifications",
+          description: "Unread routing and care updates",
+          showNotificationBadge: true,
         },
         {
           to: "/patients",
@@ -190,6 +204,11 @@ function Sidebar({ mobileOpen = false, onClose = () => {} }) {
                   {item.showUnreadBadge && totalUnreadConversations > 0 && (
                     <span className="min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
                       {totalUnreadConversations}
+                    </span>
+                  )}
+                  {item.showNotificationBadge && unreadCount > 0 && (
+                    <span className="min-w-7 rounded-full bg-red-500 px-2 py-1 text-center text-xs font-semibold text-white">
+                      {unreadCount}
                     </span>
                   )}
                 </>

@@ -11,6 +11,8 @@ import Chat from "./pages/Chat";
 import MyAppointments from "./pages/MyAppointments";
 import MyVitals from "./pages/MyVitals";
 import Login from "./pages/Login";
+import MedicalProfile from "./pages/MedicalProfile";
+import Notifications from "./pages/Notifications";
 import Register from "./pages/Register";
 import Dashboard from "./pages/PatientDashboard";
 
@@ -43,6 +45,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/appointments" element={<MyAppointments />} />
           <Route path="/appointments/new" element={<BookAppointment />} />
+          <Route path="/profile" element={<MedicalProfile />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/vitals" element={<MyVitals />} />
           <Route path="/chat" element={<Chat />} />
         </Route>

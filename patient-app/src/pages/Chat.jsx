@@ -196,6 +196,7 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const initialDoctorId = searchParams.get("doctor") || "";
   const [doctors, setDoctors] = useState([]);
+  const [emergencyContact, setEmergencyContact] = useState(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState(initialDoctorId);
   const [mobilePane, setMobilePane] = useState(
     initialDoctorId ? "conversation" : "list",
@@ -251,6 +252,38 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
+    const fetchEmergencyContact = async () => {
+      try {
+        const res = await API.get("/alerts/emergency/active");
+        const alert = res.data?.alert || null;
+        const activeContact = res.data?.activeContact || null;
+
+        if (!alert || !activeContact || alert.doctor) {
+          setEmergencyContact(null);
+          return;
+        }
+
+        setEmergencyContact({
+          _id: activeContact._id,
+          name: "Emergency Desk",
+          email: activeContact.email,
+          specialty: "Admin Triage",
+          isOnline: activeContact.isOnline !== false,
+          role: activeContact.role || "admin",
+          alertId: alert._id,
+        });
+      } catch (error) {
+        console.error("Failed to load emergency contact", error);
+        setEmergencyContact(null);
+      }
+    };
+
+    if (patientId) {
+      fetchEmergencyContact();
+    }
+  }, [patientId]);
+
+  useEffect(() => {
     const fetchConversation = async () => {
       if (!patientId || !selectedDoctorId) {
         setMessages([]);
@@ -300,12 +333,59 @@ export default function Chat() {
       }
     };
 
+    const handleEmergencyResolved = (payload) => {
+      if (getEntityId(payload?.patientId) !== patientId) {
+        return;
+      }
+
+      const shouldResetConversation =
+        emergencyContact?._id && selectedDoctorId === emergencyContact._id;
+
+      setEmergencyContact(null);
+      setFeedback("Emergency case has been closed by admin.");
+
+      if (shouldResetConversation) {
+        setSelectedDoctorId("");
+        setMessages([]);
+        setMobilePane("list");
+      }
+    };
+
+    const handleEmergencyRouted = (payload) => {
+      if (getEntityId(payload?.patientId) !== patientId) {
+        return;
+      }
+
+      const nextDoctorId = getEntityId(payload?.doctorId);
+      const shouldSwitchConversation =
+        emergencyContact?._id && selectedDoctorId === emergencyContact._id;
+
+      setEmergencyContact(null);
+      setFeedback("Your emergency case has been handed to a doctor.");
+
+      if (shouldSwitchConversation && nextDoctorId) {
+        setSelectedDoctorId(nextDoctorId);
+        setMobilePane("conversation");
+      }
+    };
+
     socket.on("new-message", handleIncomingMessage);
+    socket.on("conversation:new-message", handleIncomingMessage);
+    socket.on("emergency-resolved", handleEmergencyResolved);
+    socket.on("emergency-routed", handleEmergencyRouted);
 
     return () => {
       socket.off("new-message", handleIncomingMessage);
+      socket.off("conversation:new-message", handleIncomingMessage);
+      socket.off("emergency-resolved", handleEmergencyResolved);
+      socket.off("emergency-routed", handleEmergencyRouted);
     };
-  }, [markConversationAsRead, patientId, selectedDoctorId]);
+  }, [
+    emergencyContact,
+    markConversationAsRead,
+    patientId,
+    selectedDoctorId,
+  ]);
 
   useEffect(() => {
     downloadedAudioUrlsRef.current = downloadedAudioUrls;
@@ -358,9 +438,9 @@ export default function Chat() {
     );
   }, [doctors, search]);
 
-  const selectedDoctor = doctors.find(
-    (doctor) => doctor._id === selectedDoctorId,
-  );
+  const selectedDoctor =
+    (emergencyContact?._id === selectedDoctorId ? emergencyContact : null) ||
+    doctors.find((doctor) => doctor._id === selectedDoctorId);
   const conversationRoomId = buildConversationRoomId(patientId, selectedDoctorId);
   const isSelectedDoctorOnline = Boolean(selectedDoctor?.isOnline);
   const canSendMessage = Boolean(
@@ -560,6 +640,24 @@ export default function Chat() {
     }
   };
 
+  const handleComposerKeyDown = (event) => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent?.isComposing
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!canSendMessage) {
+      return;
+    }
+
+    sendMessage();
+  };
+
   return (
     <div className="grid gap-5 lg:grid-cols-[0.94fr_1.06fr] lg:items-start">
       <section
@@ -572,11 +670,11 @@ export default function Chat() {
             Messaging
           </p>
           <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">Doctors</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-            Online doctors can be chatted immediately. Offline doctors remain
-            visible but unavailable.
-          </p>
-        </div>
+              <p className="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
+                Online doctors can be chatted immediately. Offline doctors remain
+                visible but unavailable.
+              </p>
+            </div>
 
         <input
           className="mb-4 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
@@ -584,6 +682,44 @@ export default function Chat() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+
+        {emergencyContact && (
+          <button
+            type="button"
+            onClick={() => selectDoctor(emergencyContact._id)}
+            className={`mb-4 w-full rounded-2xl border p-4 text-left transition sm:p-5 ${
+              selectedDoctorId === emergencyContact._id
+                ? "border-rose-500 bg-rose-50"
+                : "border-rose-200 bg-rose-50/70 hover:border-rose-300"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-slate-900">
+                    {emergencyContact.name}
+                  </p>
+                  {unreadCountsByDoctor[emergencyContact._id] > 0 && (
+                    <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                      {unreadCountsByDoctor[emergencyContact._id]}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  {emergencyContact.specialty}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  An admin is triaging your emergency request. Continue here so
+                  they can assess the case before handing it to a doctor.
+                </p>
+              </div>
+
+              <span className="inline-flex shrink-0 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
+                Active
+              </span>
+            </div>
+          </button>
+        )}
 
         {filteredDoctors.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
@@ -618,20 +754,21 @@ export default function Chat() {
                       {doctor.specialty}
                     </p>
                     <p className="mt-2 text-xs text-slate-400">
-                      {doctor.isOnline
+                      {doctor.acceptingNewPatients
                         ? "Available for instant chat and calls."
-                        : "Visible here, but unavailable until back online."}
+                        : doctor.isOnline
+                          ? "Online, but currently marked busy for new workload."
+                          : "Visible here, but unavailable until back online."}
                     </p>
                   </div>
 
                   <span
-                    className={`inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-                      doctor.isOnline
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-slate-100 text-slate-500"
-                    }`}
+                    className={`inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-medium ${getDoctorStatusBadgeClassName(
+                      doctor,
+                    )}`}
                   >
-                    {doctor.isOnline ? "Online" : "Offline"}
+                    {doctor.workloadStatusLabel ||
+                      (doctor.isOnline ? "Online" : "Offline")}
                   </span>
                 </div>
               </button>
@@ -670,7 +807,9 @@ export default function Chat() {
                   ? `${selectedDoctor.specialty} | ${
                       isSelectedDoctorOnline ? "Online" : "Offline"
                     }`
-                  : "Choose an online doctor to start chatting."}
+                  : emergencyContact
+                    ? "Choose an online doctor or continue with the emergency desk."
+                    : "Choose an online doctor to start chatting."}
               </p>
             </div>
 
@@ -919,6 +1058,7 @@ export default function Chat() {
             <input
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
               placeholder={
                 isSelectedDoctorOnline
                   ? "Type a message"
@@ -979,3 +1119,14 @@ export default function Chat() {
     </div>
   );
 }
+  const getDoctorStatusBadgeClassName = (doctor) => {
+    if (doctor?.acceptingNewPatients) {
+      return "bg-emerald-50 text-emerald-700";
+    }
+
+    if (doctor?.isOnline) {
+      return "bg-amber-50 text-amber-700";
+    }
+
+    return "bg-slate-100 text-slate-500";
+  };

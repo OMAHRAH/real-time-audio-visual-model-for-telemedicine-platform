@@ -14,6 +14,12 @@ const alertSchema = new mongoose.Schema(
       default: null,
     },
 
+    triageAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     message: {
       type: String,
       required: true,
@@ -29,6 +35,27 @@ const alertSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "resolved"],
       default: "active",
+    },
+
+    routedAt: {
+      type: Date,
+      default: null,
+    },
+
+    resolvedAt: {
+      type: Date,
+      default: null,
+    },
+
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    resolutionNote: {
+      type: String,
+      default: "",
     },
 
     vitalReading: {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import API from "../api/api";
+import { clearAuthSession, storeAuthSession } from "../auth";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -21,14 +22,15 @@ function Login() {
       const role = res.data.user?.role;
 
       if (role !== "doctor" && role !== "admin") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        clearAuthSession();
         setError("Use a doctor or admin account for this dashboard.");
         return;
       }
 
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      storeAuthSession({
+        token: res.data.token,
+        user: res.data.user,
+      });
 
       window.location.href = "/";
     } catch (err) {

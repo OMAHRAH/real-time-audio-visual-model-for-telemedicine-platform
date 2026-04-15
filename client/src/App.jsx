@@ -10,6 +10,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminPatientProfile from "./pages/AdminPatientProfile";
 import Dashboard from "./pages/dashboard.jsx";
 import Login from "./pages/Login";
+import Notifications from "./pages/Notifications";
 import Patients from "./pages/Patients";
 import PatientProfile from "./pages/PatientProfile";
 
@@ -35,6 +36,14 @@ function App() {
           element={
             <ProtectedRoute>
               {homeDashboard}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />

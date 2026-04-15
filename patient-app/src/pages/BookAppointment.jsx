@@ -2,6 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import API from "../api/api";
 
+const getDoctorStatusBadgeClassName = (doctor) => {
+  if (doctor.acceptingNewPatients) {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (doctor.isOnline) {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-500";
+};
+
 export default function BookAppointment() {
   const [searchParams] = useSearchParams();
   const [doctors, setDoctors] = useState([]);
@@ -10,6 +22,9 @@ export default function BookAppointment() {
     searchParams.get("doctor") || "",
   );
   const [appointmentDate, setAppointmentDate] = useState("");
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlotId, setSelectedSlotId] = useState("");
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [reason, setReason] = useState("");
   const [feedback, setFeedback] = useState("");
 
@@ -43,6 +58,32 @@ export default function BookAppointment() {
 
   const selectedPreferredDoctor =
     doctors.find((doctor) => doctor._id === preferredDoctorId) || null;
+  const selectedSlot =
+    availableSlots.find((slot) => slot._id === selectedSlotId) || null;
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      if (!preferredDoctorId) {
+        setAvailableSlots([]);
+        setSelectedSlotId("");
+        return;
+      }
+
+      setLoadingSlots(true);
+
+      try {
+        const res = await API.get(`/scheduling/doctors/${preferredDoctorId}/slots`);
+        setAvailableSlots(res.data.slots ?? []);
+      } catch (error) {
+        console.error("Failed to fetch doctor slots", error);
+        setAvailableSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    fetchSlots();
+  }, [preferredDoctorId]);
 
   const submitAppointment = async (event) => {
     event.preventDefault();
@@ -51,12 +92,18 @@ export default function BookAppointment() {
     try {
       await API.post("/appointments", {
         doctorId: preferredDoctorId || undefined,
-        appointmentDate,
+        appointmentDate: selectedSlot?.start || appointmentDate,
+        appointmentTimezone:
+          selectedSlot?.timezone ||
+          selectedPreferredDoctor?.timezone ||
+          Intl.DateTimeFormat().resolvedOptions().timeZone,
+        slotId: selectedSlotId || undefined,
         reason,
       });
 
       setReason("");
       setAppointmentDate("");
+      setSelectedSlotId("");
       setFeedback(
         selectedPreferredDoctor
           ? `Appointment request sent. Admin will route this case and note that you prefer ${selectedPreferredDoctor.name}.`
@@ -82,8 +129,9 @@ export default function BookAppointment() {
               Search doctors
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-              Browse doctors who are currently online. Choosing one below sets a
-              preference only; the admin team still controls final routing.
+              Browse live doctor availability and workload state. Choosing one
+              below sets a preference only; the admin team still controls final
+              routing.
             </p>
           </div>
 
@@ -105,17 +153,23 @@ export default function BookAppointment() {
                 <p className="font-medium">{doctor.name}</p>
                 <p className="mt-1 text-sm text-slate-500">{doctor.specialty}</p>
                 <p className="mt-1 text-xs text-slate-400">{doctor.email}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {doctor.acceptingNewPatients
+                    ? "Accepting new patients now."
+                    : doctor.isOnline
+                      ? "Visible online, but currently carrying active workload."
+                      : "Offline from the live queue."}
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    doctor.isOnline
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${getDoctorStatusBadgeClassName(
+                    doctor,
+                  )}`}
                 >
-                  {doctor.isOnline ? "Online" : "Offline"}
+                  {doctor.workloadStatusLabel ||
+                    (doctor.isOnline ? "Online" : "Offline")}
                 </span>
 
                 <button
@@ -161,7 +215,9 @@ export default function BookAppointment() {
           {doctors.map((doctor) => (
             <option key={doctor._id} value={doctor._id}>
               {doctor.name} - {doctor.specialty} (
-              {doctor.isOnline ? "Online" : "Offline"})
+              {doctor.workloadStatusLabel ||
+                (doctor.isOnline ? "Online" : "Offline")}
+              )
             </option>
           ))}
         </select>
@@ -169,13 +225,78 @@ export default function BookAppointment() {
         <label className="mb-2 block text-sm font-medium text-slate-700">
           Preferred date and time
         </label>
-        <input
-          type="datetime-local"
-          className="mb-4 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          value={appointmentDate}
-          onChange={(event) => setAppointmentDate(event.target.value)}
-          required
-        />
+        {preferredDoctorId ? (
+          <div className="mb-4 space-y-3">
+            {loadingSlots ? (
+              <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                Loading available slots...
+              </p>
+            ) : availableSlots.length === 0 ? (
+              <>
+                <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  No published slots yet for this doctor. You can still request
+                  a manual date below.
+                </p>
+                <input
+                  type="datetime-local"
+                  className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  value={appointmentDate}
+                  onChange={(event) => setAppointmentDate(event.target.value)}
+                  required={!selectedSlotId}
+                />
+              </>
+            ) : (
+              <div className="space-y-2">
+                {availableSlots.slice(0, 8).map((slot) => (
+                  <button
+                    key={slot._id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSlotId(slot._id);
+                      setAppointmentDate("");
+                    }}
+                    className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                      selectedSlotId === slot._id
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <p className="font-medium text-slate-900">
+                      {new Date(slot.start).toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Ends {new Date(slot.end).toLocaleTimeString()} | {slot.timezone}
+                    </p>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlotId("")}
+                  className="text-sm font-medium text-blue-600"
+                >
+                  Clear selected slot and request a manual time instead
+                </button>
+                {!selectedSlotId && (
+                  <input
+                    type="datetime-local"
+                    className="w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                    value={appointmentDate}
+                    onChange={(event) => setAppointmentDate(event.target.value)}
+                    required={!selectedSlotId}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <input
+            type="datetime-local"
+            className="mb-4 w-full rounded-2xl border border-slate-200 p-3 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            value={appointmentDate}
+            onChange={(event) => setAppointmentDate(event.target.value)}
+            required
+          />
+        )}
 
         <label className="mb-2 block text-sm font-medium text-slate-700">
           Reason
